@@ -95,6 +95,16 @@ const JobForm = ({ onSuccess, onCancel, jobId }: JobFormProps) => {
       if (error) throw error;
       
       const scheduledDate = new Date(data.scheduled_start);
+      
+      // Convert checklist arrays back to comma-separated strings for editing
+      const safetyItems = Array.isArray(data.safety_checklist) 
+        ? data.safety_checklist.map((item: any) => item.item).join(", ")
+        : data.safety_requirements || "";
+      
+      const materialsItems = Array.isArray(data.materials_checklist)
+        ? data.materials_checklist.map((item: any) => item.item).join(", ")
+        : data.materials_required || "";
+      
       setFormData({
         customer_name: data.customer_name,
         customer_address: data.customer_address,
@@ -107,8 +117,8 @@ const JobForm = ({ onSuccess, onCancel, jobId }: JobFormProps) => {
         assigned_to: data.assigned_to || "",
         scheduled_date: scheduledDate.toISOString().split("T")[0],
         scheduled_time: scheduledDate.toTimeString().slice(0, 5),
-        materials_required: data.materials_required || "",
-        safety_requirements: data.safety_requirements || "",
+        materials_required: materialsItems,
+        safety_requirements: safetyItems,
       });
     } catch (error) {
       console.error("Error loading job:", error);
@@ -131,6 +141,19 @@ const JobForm = ({ onSuccess, onCancel, jobId }: JobFormProps) => {
         `${formData.scheduled_date}T${formData.scheduled_time}`
       ).toISOString();
 
+      // Convert comma-separated text to checklist format
+      const safetyChecklist = formData.safety_requirements
+        .split(",")
+        .map(item => item.trim())
+        .filter(item => item.length > 0)
+        .map(item => ({ item, completed: false }));
+
+      const materialsChecklist = formData.materials_required
+        .split(",")
+        .map(item => item.trim())
+        .filter(item => item.length > 0)
+        .map(item => ({ item, completed: false, quantity: 1 }));
+
       const jobData = {
         customer_name: formData.customer_name,
         customer_address: formData.customer_address,
@@ -144,6 +167,8 @@ const JobForm = ({ onSuccess, onCancel, jobId }: JobFormProps) => {
         scheduled_start: scheduledStart,
         materials_required: formData.materials_required || null,
         safety_requirements: formData.safety_requirements || null,
+        safety_checklist: safetyChecklist as any,
+        materials_checklist: materialsChecklist as any,
         created_by: user?.id,
         status: "pending",
       };
@@ -334,7 +359,9 @@ const JobForm = ({ onSuccess, onCancel, jobId }: JobFormProps) => {
           value={formData.materials_required}
           onChange={(e) => setFormData({ ...formData, materials_required: e.target.value })}
           rows={2}
+          placeholder="Enter items separated by commas (e.g., Wire cutters, Electrical tape, 2x4 lumber)"
         />
+        <p className="text-xs text-muted-foreground">Separate items with commas</p>
       </div>
 
       <div className="space-y-2">
@@ -344,7 +371,9 @@ const JobForm = ({ onSuccess, onCancel, jobId }: JobFormProps) => {
           value={formData.safety_requirements}
           onChange={(e) => setFormData({ ...formData, safety_requirements: e.target.value })}
           rows={2}
+          placeholder="Enter requirements separated by commas (e.g., Hard hat, Safety glasses, Harness)"
         />
+        <p className="text-xs text-muted-foreground">Separate items with commas</p>
       </div>
 
       <div className="flex gap-3 pt-4">

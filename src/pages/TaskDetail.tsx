@@ -10,6 +10,13 @@ import { ArrowLeft, MapPin, Calendar, Clock, CheckCircle2, Play } from "lucide-r
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import PhotoUpload from "@/components/PhotoUpload";
+import Checklist from "@/components/Checklist";
+
+interface ChecklistItem {
+  item: string;
+  completed: boolean;
+  quantity?: number;
+}
 
 interface Job {
   id: string;
@@ -21,6 +28,8 @@ interface Job {
   status: string;
   priority: string;
   notes: string | null;
+  safety_checklist: ChecklistItem[];
+  materials_checklist: ChecklistItem[];
 }
 
 const statusColors = {
@@ -38,6 +47,8 @@ const TaskDetail = () => {
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [photos, setPhotos] = useState<string[]>([]);
+  const [safetyChecklist, setSafetyChecklist] = useState<ChecklistItem[]>([]);
+  const [materialsChecklist, setMaterialsChecklist] = useState<ChecklistItem[]>([]);
 
   useEffect(() => {
     if (id) {
@@ -53,8 +64,10 @@ const TaskDetail = () => {
       .single();
 
     if (data) {
-      setJob(data);
+      setJob(data as any);
       setNotes(data.notes || "");
+      setSafetyChecklist((data.safety_checklist as any) || []);
+      setMaterialsChecklist((data.materials_checklist as any) || []);
     }
 
     // Load existing job photos from job_updates
@@ -67,6 +80,26 @@ const TaskDetail = () => {
     if (updates && updates.length > 0) {
       const allPhotos = updates.flatMap(u => u.photo_urls || []);
       setPhotos(allPhotos);
+    }
+  };
+
+  const handleSafetyChecklistUpdate = async (items: ChecklistItem[]) => {
+    setSafetyChecklist(items);
+    if (job) {
+      await supabase
+        .from("jobs")
+        .update({ safety_checklist: items as any })
+        .eq("id", job.id);
+    }
+  };
+
+  const handleMaterialsChecklistUpdate = async (items: ChecklistItem[]) => {
+    setMaterialsChecklist(items);
+    if (job) {
+      await supabase
+        .from("jobs")
+        .update({ materials_checklist: items as any })
+        .eq("id", job.id);
     }
   };
 
@@ -198,6 +231,19 @@ const TaskDetail = () => {
             />
           </CardContent>
         </Card>
+
+        <Checklist
+          title="Safety Requirements"
+          items={safetyChecklist}
+          onUpdate={handleSafetyChecklistUpdate}
+        />
+
+        <Checklist
+          title="Materials & Equipment"
+          items={materialsChecklist}
+          onUpdate={handleMaterialsChecklistUpdate}
+          showQuantity
+        />
 
         <div className="space-y-2">
           {job.status === "pending" && (
