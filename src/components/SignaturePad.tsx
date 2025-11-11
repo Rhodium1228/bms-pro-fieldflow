@@ -1,5 +1,4 @@
-import { useRef, useState } from "react";
-import SignatureCanvas from "react-signature-canvas";
+import { useRef, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { X, RotateCcw, Check } from "lucide-react";
@@ -13,16 +12,83 @@ interface SignaturePadProps {
 }
 
 const SignaturePad = ({ onSignatureSave, onCancel, label = "Customer Signature" }: SignaturePadProps) => {
-  const sigPadRef = useRef<SignatureCanvas>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [hasSignature, setHasSignature] = useState(false);
   const { toast } = useToast();
 
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Set canvas size
+    canvas.width = canvas.offsetWidth;
+    canvas.height = 192; // h-48 = 192px
+
+    // Set drawing styles
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+  }, []);
+
+  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    setIsDrawing(true);
+    setHasSignature(true);
+
+    const rect = canvas.getBoundingClientRect();
+    const x = 'touches' in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
+    const y = 'touches' in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
+
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+  };
+
+  const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if (!isDrawing) return;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = 'touches' in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
+    const y = 'touches' in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
+
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  };
+
+  const stopDrawing = () => {
+    setIsDrawing(false);
+  };
+
   const handleClear = () => {
-    sigPadRef.current?.clear();
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setHasSignature(false);
   };
 
   const handleSave = async () => {
-    if (!sigPadRef.current || sigPadRef.current.isEmpty()) {
+    const canvas = canvasRef.current;
+    if (!canvas || !hasSignature) {
       toast({
         title: "Signature required",
         description: "Please provide a signature before saving",
@@ -38,16 +104,19 @@ const SignaturePad = ({ onSignatureSave, onCancel, label = "Customer Signature" 
       if (!user) throw new Error("Not authenticated");
 
       // Convert canvas to blob
-      const canvas = sigPadRef.current.getCanvas();
-      const blob = await new Promise<Blob>((resolve) => {
+      const blob = await new Promise<Blob>((resolve, reject) => {
         canvas.toBlob((blob) => {
-          resolve(blob as Blob);
+          if (blob) {
+            resolve(blob);
+          } else {
+            reject(new Error("Failed to create blob"));
+          }
         }, "image/png");
       });
 
       // Upload to Supabase Storage
       const fileName = `${user.id}/signatures/${Date.now()}.png`;
-      const { error: uploadError, data } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('job-photos')
         .upload(fileName, blob, {
           contentType: 'image/png',
@@ -86,16 +155,17 @@ const SignaturePad = ({ onSignatureSave, onCancel, label = "Customer Signature" 
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="border-2 border-dashed border-border rounded-lg bg-background overflow-hidden">
-          <SignatureCanvas
-            ref={sigPadRef}
-            canvasProps={{
-              className: "w-full h-48 touch-none",
-              style: { touchAction: 'none' }
-            }}
-            backgroundColor="#ffffff"
-            penColor="#000000"
-            minWidth={1}
-            maxWidth={2}
+          <canvas
+            ref={canvasRef}
+            onMouseDown={startDrawing}
+            onMouseMove={draw}
+            onMouseUp={stopDrawing}
+            onMouseLeave={stopDrawing}
+            onTouchStart={startDrawing}
+            onTouchMove={draw}
+            onTouchEnd={stopDrawing}
+            className="w-full h-48 touch-none cursor-crosshair"
+            style={{ touchAction: 'none' }}
           />
         </div>
 
@@ -121,7 +191,7 @@ const SignaturePad = ({ onSignatureSave, onCancel, label = "Customer Signature" 
           <Button
             type="button"
             onClick={handleSave}
-            disabled={isSaving}
+            disabled={isSaving || !hasSignature}
             className="flex-1"
           >
             <Check className="mr-2 h-4 w-4" />
