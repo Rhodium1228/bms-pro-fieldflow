@@ -112,6 +112,8 @@ export type Database = {
       jobs: {
         Row: {
           assigned_to: string | null
+          completed_at: string | null
+          completed_by: string | null
           created_at: string | null
           created_by: string | null
           customer_address: string
@@ -132,11 +134,14 @@ export type Database = {
           safety_requirements: string | null
           scheduled_end: string | null
           scheduled_start: string
+          signature_url: string | null
           status: string | null
           updated_at: string | null
         }
         Insert: {
           assigned_to?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
           created_at?: string | null
           created_by?: string | null
           customer_address: string
@@ -157,11 +162,14 @@ export type Database = {
           safety_requirements?: string | null
           scheduled_end?: string | null
           scheduled_start: string
+          signature_url?: string | null
           status?: string | null
           updated_at?: string | null
         }
         Update: {
           assigned_to?: string | null
+          completed_at?: string | null
+          completed_by?: string | null
           created_at?: string | null
           created_by?: string | null
           customer_address?: string
@@ -182,6 +190,7 @@ export type Database = {
           safety_requirements?: string | null
           scheduled_end?: string | null
           scheduled_start?: string
+          signature_url?: string | null
           status?: string | null
           updated_at?: string | null
         }

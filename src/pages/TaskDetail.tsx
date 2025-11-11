@@ -11,6 +11,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import PhotoUpload from "@/components/PhotoUpload";
 import Checklist from "@/components/Checklist";
+import SignaturePad from "@/components/SignaturePad";
 
 interface ChecklistItem {
   item: string;
@@ -49,6 +50,8 @@ const TaskDetail = () => {
   const [photos, setPhotos] = useState<string[]>([]);
   const [safetyChecklist, setSafetyChecklist] = useState<ChecklistItem[]>([]);
   const [materialsChecklist, setMaterialsChecklist] = useState<ChecklistItem[]>([]);
+  const [showSignaturePad, setShowSignaturePad] = useState(false);
+  const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -68,6 +71,7 @@ const TaskDetail = () => {
       setNotes(data.notes || "");
       setSafetyChecklist((data.safety_checklist as any) || []);
       setMaterialsChecklist((data.materials_checklist as any) || []);
+      setSignatureUrl(data.signature_url || null);
     }
 
     // Load existing job photos from job_updates
@@ -106,10 +110,30 @@ const TaskDetail = () => {
   const updateStatus = async (newStatus: string) => {
     if (!job) return;
 
+    // Check for signature requirement on completion
+    if (newStatus === "completed" && !signatureUrl) {
+      setShowSignaturePad(true);
+      return;
+    }
+
     setLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    const updateData: any = { 
+      status: newStatus, 
+      notes 
+    };
+
+    // Add completion metadata when completing job
+    if (newStatus === "completed") {
+      updateData.completed_at = new Date().toISOString();
+      updateData.completed_by = user?.id;
+      updateData.signature_url = signatureUrl;
+    }
+
     const { error } = await supabase
       .from("jobs")
-      .update({ status: newStatus, notes })
+      .update(updateData)
       .eq("id", job.id);
 
     if (error) {
@@ -124,7 +148,6 @@ const TaskDetail = () => {
         description: `Job marked as ${newStatus.replace("_", " ")}`,
       });
 
-      const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         await supabase.from("job_updates").insert({
           job_id: job.id,
@@ -138,6 +161,16 @@ const TaskDetail = () => {
       loadJob();
     }
     setLoading(false);
+  };
+
+  const handleSignatureSave = (url: string) => {
+    setSignatureUrl(url);
+    setShowSignaturePad(false);
+    
+    // Automatically complete the job after signature
+    if (job) {
+      updateStatus("completed");
+    }
   };
 
   if (!job) {
@@ -244,6 +277,29 @@ const TaskDetail = () => {
           onUpdate={handleMaterialsChecklistUpdate}
           showQuantity
         />
+
+        {showSignaturePad && (
+          <SignaturePad
+            onSignatureSave={handleSignatureSave}
+            onCancel={() => setShowSignaturePad(false)}
+            label="Customer Signature Required"
+          />
+        )}
+
+        {signatureUrl && !showSignaturePad && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Completion Signature</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <img 
+                src={signatureUrl} 
+                alt="Customer signature" 
+                className="w-full border border-border rounded-lg bg-background p-2"
+              />
+            </CardContent>
+          </Card>
+        )}
 
         <div className="space-y-2">
           {job.status === "pending" && (
