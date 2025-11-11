@@ -122,9 +122,13 @@ export type Database = {
           id: string
           job_description: string
           job_type: string | null
+          materials_checklist: Json | null
+          materials_completion: number | null
           materials_required: string | null
           notes: string | null
           priority: string | null
+          safety_checklist: Json | null
+          safety_completion: number | null
           safety_requirements: string | null
           scheduled_end: string | null
           scheduled_start: string
@@ -143,9 +147,13 @@ export type Database = {
           id?: string
           job_description: string
           job_type?: string | null
+          materials_checklist?: Json | null
+          materials_completion?: number | null
           materials_required?: string | null
           notes?: string | null
           priority?: string | null
+          safety_checklist?: Json | null
+          safety_completion?: number | null
           safety_requirements?: string | null
           scheduled_end?: string | null
           scheduled_start: string
@@ -164,9 +172,13 @@ export type Database = {
           id?: string
           job_description?: string
           job_type?: string | null
+          materials_checklist?: Json | null
+          materials_completion?: number | null
           materials_required?: string | null
           notes?: string | null
           priority?: string | null
+          safety_checklist?: Json | null
+          safety_completion?: number | null
           safety_requirements?: string | null
           scheduled_end?: string | null
           scheduled_start?: string
@@ -237,6 +249,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      calculate_checklist_completion: {
+        Args: { checklist: Json }
+        Returns: number
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
