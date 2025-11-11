@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, MapPin, Calendar, Clock, CheckCircle2, Play } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import PhotoUpload from "@/components/PhotoUpload";
 
 interface Job {
   id: string;
@@ -36,6 +37,7 @@ const TaskDetail = () => {
   const [job, setJob] = useState<Job | null>(null);
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
+  const [photos, setPhotos] = useState<string[]>([]);
 
   useEffect(() => {
     if (id) {
@@ -53,6 +55,18 @@ const TaskDetail = () => {
     if (data) {
       setJob(data);
       setNotes(data.notes || "");
+    }
+
+    // Load existing job photos from job_updates
+    const { data: updates } = await supabase
+      .from("job_updates")
+      .select("photo_urls")
+      .eq("job_id", id)
+      .not("photo_urls", "is", null);
+
+    if (updates && updates.length > 0) {
+      const allPhotos = updates.flatMap(u => u.photo_urls || []);
+      setPhotos(allPhotos);
     }
   };
 
@@ -84,6 +98,7 @@ const TaskDetail = () => {
           user_id: user.id,
           update_type: newStatus,
           notes,
+          photo_urls: photos.length > 0 ? photos : null,
         });
       }
 
@@ -166,6 +181,20 @@ const TaskDetail = () => {
               onChange={(e) => setNotes(e.target.value)}
               rows={4}
               className="resize-none"
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Job Photos</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PhotoUpload
+              jobId={job.id}
+              existingPhotos={photos}
+              onPhotosUpdate={setPhotos}
+              label="Add Photos"
             />
           </CardContent>
         </Card>
