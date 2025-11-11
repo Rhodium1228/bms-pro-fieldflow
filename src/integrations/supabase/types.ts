@@ -16,36 +16,57 @@ export type Database = {
     Tables: {
       clock_entries: {
         Row: {
+          approval_notes: string | null
+          approval_status: string | null
+          approved_at: string | null
+          approved_by: string | null
+          break_duration: number | null
           break_end: string | null
           break_start: string | null
           clock_in: string
           clock_out: string | null
           created_at: string | null
           id: string
+          last_location_update: string | null
           location_lat: number | null
           location_lng: number | null
+          total_hours: number | null
           user_id: string
         }
         Insert: {
+          approval_notes?: string | null
+          approval_status?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          break_duration?: number | null
           break_end?: string | null
           break_start?: string | null
           clock_in: string
           clock_out?: string | null
           created_at?: string | null
           id?: string
+          last_location_update?: string | null
           location_lat?: number | null
           location_lng?: number | null
+          total_hours?: number | null
           user_id: string
         }
         Update: {
+          approval_notes?: string | null
+          approval_status?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          break_duration?: number | null
           break_end?: string | null
           break_start?: string | null
           clock_in?: string
           clock_out?: string | null
           created_at?: string | null
           id?: string
+          last_location_update?: string | null
           location_lat?: number | null
           location_lng?: number | null
+          total_hours?: number | null
           user_id?: string
         }
         Relationships: []
@@ -92,12 +113,19 @@ export type Database = {
         Row: {
           assigned_to: string | null
           created_at: string | null
+          created_by: string | null
           customer_address: string
+          customer_email: string | null
           customer_name: string
+          customer_phone: string | null
+          estimated_duration: number | null
           id: string
           job_description: string
+          job_type: string | null
+          materials_required: string | null
           notes: string | null
           priority: string | null
+          safety_requirements: string | null
           scheduled_end: string | null
           scheduled_start: string
           status: string | null
@@ -106,12 +134,19 @@ export type Database = {
         Insert: {
           assigned_to?: string | null
           created_at?: string | null
+          created_by?: string | null
           customer_address: string
+          customer_email?: string | null
           customer_name: string
+          customer_phone?: string | null
+          estimated_duration?: number | null
           id?: string
           job_description: string
+          job_type?: string | null
+          materials_required?: string | null
           notes?: string | null
           priority?: string | null
+          safety_requirements?: string | null
           scheduled_end?: string | null
           scheduled_start: string
           status?: string | null
@@ -120,12 +155,19 @@ export type Database = {
         Update: {
           assigned_to?: string | null
           created_at?: string | null
+          created_by?: string | null
           customer_address?: string
+          customer_email?: string | null
           customer_name?: string
+          customer_phone?: string | null
+          estimated_duration?: number | null
           id?: string
           job_description?: string
+          job_type?: string | null
+          materials_required?: string | null
           notes?: string | null
           priority?: string | null
+          safety_requirements?: string | null
           scheduled_end?: string | null
           scheduled_start?: string
           status?: string | null
@@ -141,7 +183,6 @@ export type Database = {
           full_name: string
           id: string
           phone: string | null
-          role: string | null
           updated_at: string | null
           user_id: string
         }
@@ -152,7 +193,6 @@ export type Database = {
           full_name: string
           id?: string
           phone?: string | null
-          role?: string | null
           updated_at?: string | null
           user_id: string
         }
@@ -163,8 +203,31 @@ export type Database = {
           full_name?: string
           id?: string
           phone?: string | null
-          role?: string | null
           updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          assigned_at: string | null
+          assigned_by: string | null
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          assigned_at?: string | null
+          assigned_by?: string | null
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          assigned_at?: string | null
+          assigned_by?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
         }
         Relationships: []
@@ -174,10 +237,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "staff" | "supervisor" | "manager"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -304,6 +373,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["staff", "supervisor", "manager"],
+    },
   },
 } as const

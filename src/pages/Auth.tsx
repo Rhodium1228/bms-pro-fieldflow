@@ -107,7 +107,6 @@ const Auth = () => {
               user_id: data.user.id,
               full_name: fullName.trim(),
               email: email.trim(),
-              role: selectedRole || "staff",
             });
 
           if (profileError) {

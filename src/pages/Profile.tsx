@@ -13,11 +13,15 @@ interface Profile {
   full_name: string;
   email: string;
   phone: string | null;
+}
+
+interface UserRole {
   role: string;
 }
 
 const Profile = () => {
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -30,14 +34,24 @@ const Profile = () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const { data } = await supabase
+    const { data: profileData } = await supabase
       .from("profiles")
-      .select("*")
+      .select("full_name, email, phone")
       .eq("user_id", user.id)
       .single();
 
-    if (data) {
-      setProfile(data);
+    // Fetch user role from user_roles table
+    const { data: roleData } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id)
+      .single();
+
+    if (profileData) {
+      setProfile(profileData);
+    }
+    if (roleData) {
+      setUserRole(roleData);
     }
   };
 
@@ -151,7 +165,7 @@ const Profile = () => {
                 </Label>
                 <Input
                   id="role"
-                  value={profile.role}
+                  value={userRole?.role || "No role assigned"}
                   disabled
                   className="bg-muted capitalize"
                 />
