@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { LayoutDashboard, Briefcase, Clock, BarChart3, User } from "lucide-react";
+import { LayoutDashboard, Briefcase, Clock, MapPin, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const SupervisorBottomNav = () => {
@@ -8,8 +8,8 @@ const SupervisorBottomNav = () => {
   const navItems = [
     { icon: LayoutDashboard, label: "Dashboard", path: "/supervisor" },
     { icon: Briefcase, label: "Jobs", path: "/supervisor/jobs" },
+    { icon: MapPin, label: "Team Map", path: "/supervisor/tracking" },
     { icon: Clock, label: "Timesheets", path: "/supervisor/timesheets" },
-    { icon: BarChart3, label: "Reports", path: "/supervisor/reports" },
     { icon: User, label: "Profile", path: "/profile" },
   ];
 

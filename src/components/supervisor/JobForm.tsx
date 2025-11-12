@@ -135,7 +135,16 @@ const JobForm = ({ onSuccess, onCancel, jobId }: JobFormProps) => {
     setLoading(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      console.log("🚀 Starting job creation/update...");
+      
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !user) {
+        console.error("❌ Auth error:", userError);
+        throw new Error("Not authenticated. Please log in again.");
+      }
+      
+      console.log("✅ User authenticated:", user.id);
       
       const scheduledStart = new Date(
         `${formData.scheduled_date}T${formData.scheduled_time}`
@@ -169,29 +178,52 @@ const JobForm = ({ onSuccess, onCancel, jobId }: JobFormProps) => {
         safety_requirements: formData.safety_requirements || null,
         safety_checklist: safetyChecklist as any,
         materials_checklist: materialsChecklist as any,
-        created_by: user?.id,
+        created_by: user.id,
         status: "pending",
       };
 
+      console.log("📝 Job data prepared:", {
+        ...jobData,
+        checklist_counts: {
+          safety: safetyChecklist.length,
+          materials: materialsChecklist.length
+        }
+      });
+
       if (jobId) {
-        const { error } = await supabase
+        console.log("🔄 Updating existing job:", jobId);
+        const { error, data } = await supabase
           .from("jobs")
           .update(jobData)
-          .eq("id", jobId);
+          .eq("id", jobId)
+          .select();
 
-        if (error) throw error;
+        if (error) {
+          console.error("❌ Update error:", error);
+          throw error;
+        }
         
+        console.log("✅ Job updated successfully:", data);
         toast({
           title: "Success",
           description: "Job updated successfully",
         });
       } else {
-        const { error } = await supabase
+        console.log("➕ Creating new job...");
+        const { error, data } = await supabase
           .from("jobs")
-          .insert([jobData]);
+          .insert([jobData])
+          .select();
 
-        if (error) throw error;
+        if (error) {
+          console.error("❌ Insert error:", error);
+          if (error.message.includes("row-level security")) {
+            throw new Error("Permission denied. You may not have supervisor privileges.");
+          }
+          throw error;
+        }
         
+        console.log("✅ Job created successfully:", data);
         toast({
           title: "Success",
           description: "Job created successfully",
@@ -199,11 +231,19 @@ const JobForm = ({ onSuccess, onCancel, jobId }: JobFormProps) => {
       }
 
       onSuccess();
-    } catch (error) {
-      console.error("Error saving job:", error);
+    } catch (error: any) {
+      console.error("💥 Job save error:", error);
+      
+      let errorMessage = "Failed to save job";
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (error.code === "PGRST301") {
+        errorMessage = "Permission denied. You may not have supervisor privileges.";
+      }
+      
       toast({
         title: "Error",
-        description: "Failed to save job",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
