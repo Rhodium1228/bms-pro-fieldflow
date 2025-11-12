@@ -272,7 +272,7 @@ const TaskDetail = () => {
         />
 
         <Checklist
-          title="Materials & Equipment"
+          title="Tasks Assigned by Supervisor"
           items={materialsChecklist}
           onUpdate={handleMaterialsChecklistUpdate}
           showQuantity
