@@ -29,19 +29,16 @@ const Auth = () => {
     const { data, error } = await supabase
       .from("user_roles")
       .select("role")
-      .eq("user_id", userId)
-      .single();
+      .eq("user_id", userId);
 
-    if (error || !data) {
-      console.error("Error fetching user role:", error);
+    if (error) {
+      console.error("Error fetching user roles:", error);
       return "/"; // Default to staff page
     }
 
-    // Redirect based on role
-    if (data.role === "supervisor" || data.role === "manager") {
-      return "/supervisor";
-    }
-    return "/"; // Staff goes to home page
+    const roles = (data?.map((r: { role: string }) => r.role) ?? []) as string[];
+    if (roles.includes("manager") || roles.includes("supervisor")) return "/supervisor";
+    return "/"; // Staff or no role
   };
 
   useEffect(() => {
