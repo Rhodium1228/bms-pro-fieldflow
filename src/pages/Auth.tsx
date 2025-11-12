@@ -25,18 +25,39 @@ const Auth = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  const getRoleBasedRedirect = async (userId: string): Promise<string> => {
+    const { data, error } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .single();
+
+    if (error || !data) {
+      console.error("Error fetching user role:", error);
+      return "/"; // Default to staff page
+    }
+
+    // Redirect based on role
+    if (data.role === "supervisor" || data.role === "manager") {
+      return "/supervisor";
+    }
+    return "/"; // Staff goes to home page
+  };
+
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        navigate("/");
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) {
+        const redirectPath = await getRoleBasedRedirect(session.user.id);
+        navigate(redirectPath);
       }
     });
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN" && session) {
-        navigate("/");
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === "SIGNED_IN" && session?.user) {
+        const redirectPath = await getRoleBasedRedirect(session.user.id);
+        navigate(redirectPath);
       }
     });
 
@@ -78,6 +99,13 @@ const Auth = () => {
           title: "Welcome back!",
           description: "You've successfully logged in.",
         });
+
+        // Role-based redirect after login
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const redirectPath = await getRoleBasedRedirect(user.id);
+          navigate(redirectPath);
+        }
       } else {
         const { data, error } = await supabase.auth.signUp({
           email: email.trim(),
