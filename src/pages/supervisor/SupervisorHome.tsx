@@ -2,9 +2,12 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import SupervisorBottomNav from "@/components/supervisor/SupervisorBottomNav";
+import TeamMap from "@/components/supervisor/TeamMap";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, UserCheck, Coffee, Briefcase, Plus, Clock } from "lucide-react";
+import { Users, UserCheck, Coffee, Briefcase, Plus, Clock, MapPin } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import JobForm from "@/components/supervisor/JobForm";
 
 interface TeamStats {
   totalStaff: number;
@@ -26,6 +29,25 @@ interface Job {
   };
 }
 
+interface TechnicianStatus {
+  user_id: string;
+  full_name: string;
+  status: "clocked_in" | "on_break" | "clocked_out";
+  current_job: string | null;
+  job_address: string | null;
+  location_lat: number | null;
+  location_lng: number | null;
+  last_update: string | null;
+  clock_in_time: string | null;
+  break_duration: number | null;
+  task_progress: {
+    completed: number;
+    total: number;
+    percentage: number;
+  } | null;
+  distance_from_job: number | null;
+}
+
 const SupervisorHome = () => {
   const navigate = useNavigate();
   const [teamStats, setTeamStats] = useState<TeamStats>({
@@ -36,9 +58,12 @@ const SupervisorHome = () => {
   });
   const [todayJobs, setTodayJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
+  const [technicians, setTechnicians] = useState<TechnicianStatus[]>([]);
+  const [showJobDialog, setShowJobDialog] = useState(false);
 
   useEffect(() => {
     loadDashboardData();
+    loadTeamTracking();
   }, []);
 
   const loadDashboardData = async () => {
@@ -102,6 +127,86 @@ const SupervisorHome = () => {
     }
   };
 
+  const loadTeamTracking = async () => {
+    try {
+      const { data: staffRoles } = await supabase
+        .from("user_roles")
+        .select("user_id")
+        .eq("role", "staff");
+
+      const userIds = staffRoles?.map(r => r.user_id) || [];
+      if (userIds.length === 0) return;
+
+      const today = new Date().toISOString().split("T")[0];
+      const { data: clockEntries } = await supabase
+        .from("clock_entries")
+        .select("*")
+        .in("user_id", userIds)
+        .gte("clock_in", `${today}T00:00:00`)
+        .is("clock_out", null);
+
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("user_id, full_name")
+        .in("user_id", userIds);
+
+      const techStatuses: TechnicianStatus[] = await Promise.all(
+        (profiles || []).map(async (profile) => {
+          const clockEntry = clockEntries?.find(c => c.user_id === profile.user_id);
+          
+          let jobInfo = null;
+          let taskProgress = null;
+          
+          if (clockEntry) {
+            const { data: job } = await supabase
+              .from("jobs")
+              .select("customer_name, customer_address, materials_checklist")
+              .eq("assigned_to", profile.user_id)
+              .eq("status", "in_progress")
+              .single();
+            
+            if (job) {
+              jobInfo = {
+                name: job.customer_name,
+                address: job.customer_address
+              };
+              
+              const checklist = Array.isArray(job.materials_checklist) ? job.materials_checklist : [];
+              const completed = checklist.filter((item: any) => item.completed).length;
+              const total = checklist.length;
+              taskProgress = {
+                completed,
+                total,
+                percentage: total > 0 ? Math.round((completed / total) * 100) : 0
+              };
+            }
+          }
+
+          return {
+            user_id: profile.user_id,
+            full_name: profile.full_name,
+            status: clockEntry
+              ? (clockEntry.break_start && !clockEntry.break_end ? "on_break" : "clocked_in")
+              : "clocked_out",
+            current_job: jobInfo?.name || null,
+            job_address: jobInfo?.address || null,
+            location_lat: clockEntry?.location_lat || null,
+            location_lng: clockEntry?.location_lng || null,
+            last_update: clockEntry?.last_location_update || null,
+            clock_in_time: clockEntry?.clock_in || null,
+            break_duration: clockEntry?.break_duration || null,
+            task_progress: taskProgress,
+            distance_from_job: null
+          };
+        })
+      );
+
+      setTechnicians(techStatuses);
+    } catch (error) {
+      console.error("Error loading team tracking:", error);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "completed":
@@ -142,10 +247,26 @@ const SupervisorHome = () => {
             <h1 className="text-2xl font-bold text-foreground">Supervisor Dashboard</h1>
             <p className="text-sm text-muted-foreground">Team Overview</p>
           </div>
-          <Button onClick={() => navigate("/supervisor/jobs?create=true")} size="sm">
-            <Plus className="h-4 w-4 mr-2" />
-            Create Job
-          </Button>
+          <Dialog open={showJobDialog} onOpenChange={setShowJobDialog}>
+            <DialogTrigger asChild>
+              <Button size="sm">
+                <Plus className="h-4 w-4 mr-2" />
+                Create Job
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Create New Job</DialogTitle>
+              </DialogHeader>
+              <JobForm
+                onSuccess={() => {
+                  setShowJobDialog(false);
+                  loadDashboardData();
+                }}
+                onCancel={() => setShowJobDialog(false)}
+              />
+            </DialogContent>
+          </Dialog>
         </div>
 
         {/* Team Stats */}
@@ -197,6 +318,22 @@ const SupervisorHome = () => {
               </div>
             </div>
           </Card>
+        </div>
+
+        {/* Live Team Map */}
+        <div>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+              <MapPin className="h-5 w-5 text-primary" />
+              Live Team Tracking
+            </h2>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/supervisor/tracking")}>
+              Full Screen
+            </Button>
+          </div>
+          <div className="rounded-lg overflow-hidden border">
+            <TeamMap technicians={technicians} />
+          </div>
         </div>
 
         {/* Today's Jobs */}

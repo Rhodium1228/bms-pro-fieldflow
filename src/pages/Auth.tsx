@@ -26,19 +26,27 @@ const Auth = () => {
   const { toast } = useToast();
 
   const getRoleBasedRedirect = async (userId: string): Promise<string> => {
+    console.log("🔍 getRoleBasedRedirect called for userId:", userId);
+    
     const { data, error } = await supabase
       .from("user_roles")
       .select("role")
       .eq("user_id", userId);
 
+    console.log("📊 Role query result:", { data, error });
+
     if (error) {
-      console.error("Error fetching user roles:", error);
+      console.error("❌ Error fetching user roles:", error);
       return "/"; // Default to staff page
     }
 
     const roles = (data?.map((r: { role: string }) => r.role) ?? []) as string[];
-    if (roles.includes("manager") || roles.includes("supervisor")) return "/supervisor";
-    return "/"; // Staff or no role
+    console.log("👤 User roles:", roles);
+    
+    const redirectPath = (roles.includes("manager") || roles.includes("supervisor")) ? "/supervisor" : "/";
+    console.log("🎯 Redirect path determined:", redirectPath);
+    
+    return redirectPath;
   };
 
   useEffect(() => {
