@@ -1,296 +1,426 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import SupervisorBottomNav from "@/components/supervisor/SupervisorBottomNav";
-import { Card } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-import { Briefcase, Clock, CheckCircle, TrendingUp } from "lucide-react";
+import { 
+  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
+} from "recharts";
+import { 
+  Loader2, TrendingUp, Clock, CheckCircle, Users, 
+  Award, Calendar, Target 
+} from "lucide-react";
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subDays, eachDayOfInterval } from "date-fns";
 
-interface ReportStats {
-  totalJobs: number;
-  completedJobs: number;
-  totalHours: number;
-  averageCompletionTime: number;
+interface TechnicianStats {
+  user_id: string;
+  full_name: string;
+  jobs_completed: number;
+  total_hours: number;
+  avg_completion_time: number;
+  tasks_completed: number;
+  tasks_total: number;
+  completion_rate: number;
 }
 
-interface StaffPerformance {
-  name: string;
-  jobsCompleted: number;
-  hoursWorked: number;
+interface DailyStats {
+  date: string;
+  jobs_completed: number;
+  hours_worked: number;
 }
+
+type DateRange = "daily" | "weekly" | "monthly";
 
 const Reports = () => {
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState("week");
-  const [stats, setStats] = useState<ReportStats>({
-    totalJobs: 0,
-    completedJobs: 0,
-    totalHours: 0,
-    averageCompletionTime: 0,
+  const [dateRange, setDateRange] = useState<DateRange>("weekly");
+  const [technicianStats, setTechnicianStats] = useState<TechnicianStats[]>([]);
+  const [dailyStats, setDailyStats] = useState<DailyStats[]>([]);
+  const [totalMetrics, setTotalMetrics] = useState({
+    totalJobsCompleted: 0,
+    avgCompletionTime: 0,
+    totalHoursWorked: 0,
+    teamEfficiency: 0,
   });
-  const [staffPerformance, setStaffPerformance] = useState<StaffPerformance[]>([]);
-  const [jobStatusData, setJobStatusData] = useState<any[]>([]);
 
-  useEffect(() => {
-    loadReportData();
-  }, [period]);
+  const getDateRangeFilter = () => {
+    const now = new Date();
+    switch (dateRange) {
+      case "daily":
+        return { start: subDays(now, 7), end: now };
+      case "weekly":
+        return { start: startOfWeek(now), end: endOfWeek(now) };
+      case "monthly":
+        return { start: startOfMonth(now), end: endOfMonth(now) };
+    }
+  };
 
-  const loadReportData = async () => {
+  const loadReportsData = async () => {
     try {
-      const now = new Date();
-      let startDate: Date;
+      setLoading(true);
+      const { start, end } = getDateRangeFilter();
 
-      switch (period) {
-        case "today":
-          startDate = new Date(now.setHours(0, 0, 0, 0));
-          break;
-        case "week":
-          startDate = new Date(now.setDate(now.getDate() - 7));
-          break;
-        case "month":
-          startDate = new Date(now.setMonth(now.getMonth() - 1));
-          break;
-        default:
-          startDate = new Date(now.setDate(now.getDate() - 7));
-      }
-
-      // Get jobs data
-      const { data: jobs } = await supabase
-        .from("jobs")
-        .select("*")
-        .gte("created_at", startDate.toISOString());
-
-      const totalJobs = jobs?.length || 0;
-      const completedJobs = jobs?.filter(j => j.status === "completed").length || 0;
-
-      // Get status distribution
-      const statusCounts: { [key: string]: number } = {};
-      jobs?.forEach(job => {
-        statusCounts[job.status] = (statusCounts[job.status] || 0) + 1;
-      });
-
-      const statusData = Object.entries(statusCounts).map(([status, count]) => ({
-        name: status.replace("_", " "),
-        value: count,
-      }));
-
-      setJobStatusData(statusData);
-
-      // Get clock entries
-      const { data: clockEntries } = await supabase
-        .from("clock_entries")
-        .select("*")
-        .gte("clock_in", startDate.toISOString());
-
-      let totalHours = 0;
-      clockEntries?.forEach(entry => {
-        if (entry.clock_in && entry.clock_out) {
-          const hours = (new Date(entry.clock_out).getTime() - new Date(entry.clock_in).getTime()) / (1000 * 60 * 60);
-          totalHours += hours;
-        }
-      });
-
-      // Get staff performance
       const { data: staffRoles } = await supabase
         .from("user_roles")
         .select("user_id")
         .eq("role", "staff");
 
-      const staffIds = staffRoles?.map(r => r.user_id) || [];
+      if (!staffRoles || staffRoles.length === 0) {
+        setLoading(false);
+        return;
+      }
+
+      const staffIds = staffRoles.map(r => r.user_id);
 
       const { data: profiles } = await supabase
         .from("profiles")
         .select("user_id, full_name")
         .in("user_id", staffIds);
 
-      const performance: StaffPerformance[] = [];
+      const { data: completedJobs } = await supabase
+        .from("jobs")
+        .select("*")
+        .eq("status", "completed")
+        .gte("completed_at", start.toISOString())
+        .lte("completed_at", end.toISOString())
+        .in("assigned_to", staffIds);
 
-      for (const profile of profiles || []) {
-        const staffJobs = jobs?.filter(j => j.assigned_to === profile.user_id) || [];
-        const staffCompleted = staffJobs.filter(j => j.status === "completed").length;
+      const { data: clockEntries } = await supabase
+        .from("clock_entries")
+        .select("*")
+        .gte("clock_in", start.toISOString())
+        .lte("clock_in", end.toISOString())
+        .in("user_id", staffIds);
+
+      const techStats: TechnicianStats[] = (profiles || []).map(profile => {
+        const userJobs = (completedJobs || []).filter(j => j.assigned_to === profile.user_id);
+        const userClockEntries = (clockEntries || []).filter(e => e.user_id === profile.user_id);
+
+        const jobsCompleted = userJobs.length;
         
-        const staffClock = clockEntries?.filter(e => e.user_id === profile.user_id) || [];
-        let staffHours = 0;
-        staffClock.forEach(entry => {
-          if (entry.clock_in && entry.clock_out) {
-            const hours = (new Date(entry.clock_out).getTime() - new Date(entry.clock_in).getTime()) / (1000 * 60 * 60);
-            staffHours += hours;
+        const totalHours = userClockEntries.reduce((sum, entry) => {
+          if (entry.total_hours) return sum + Number(entry.total_hours);
+          if (entry.clock_out) {
+            const clockIn = new Date(entry.clock_in);
+            const clockOut = new Date(entry.clock_out);
+            const hours = (clockOut.getTime() - clockIn.getTime()) / (1000 * 60 * 60);
+            return sum + hours;
           }
-        });
+          return sum;
+        }, 0);
 
-        performance.push({
-          name: profile.full_name,
-          jobsCompleted: staffCompleted,
-          hoursWorked: parseFloat(staffHours.toFixed(1)),
-        });
-      }
+        const avgCompletionTime = userJobs.length > 0
+          ? userJobs.reduce((sum, job) => {
+              if (job.scheduled_start && job.completed_at) {
+                const scheduled = new Date(job.scheduled_start);
+                const completed = new Date(job.completed_at);
+                const hours = (completed.getTime() - scheduled.getTime()) / (1000 * 60 * 60);
+                return sum + hours;
+              }
+              return sum;
+            }, 0) / userJobs.length
+          : 0;
 
-      performance.sort((a, b) => b.jobsCompleted - a.jobsCompleted);
+        const tasksData = userJobs.reduce((acc, job) => {
+          if (job.materials_checklist) {
+            const checklist = job.materials_checklist as any[];
+            acc.total += checklist.length;
+            acc.completed += checklist.filter(item => item.completed).length;
+          }
+          return acc;
+        }, { completed: 0, total: 0 });
 
-      setStaffPerformance(performance.slice(0, 5));
-      setStats({
-        totalJobs,
-        completedJobs,
-        totalHours: parseFloat(totalHours.toFixed(1)),
-        averageCompletionTime: completedJobs > 0 ? parseFloat((totalHours / completedJobs).toFixed(1)) : 0,
+        const completionRate = tasksData.total > 0 
+          ? (tasksData.completed / tasksData.total) * 100 
+          : 0;
+
+        return {
+          user_id: profile.user_id,
+          full_name: profile.full_name,
+          jobs_completed: jobsCompleted,
+          total_hours: Math.round(totalHours * 10) / 10,
+          avg_completion_time: Math.round(avgCompletionTime * 10) / 10,
+          tasks_completed: tasksData.completed,
+          tasks_total: tasksData.total,
+          completion_rate: Math.round(completionRate),
+        };
       });
+
+      techStats.sort((a, b) => b.jobs_completed - a.jobs_completed);
+      setTechnicianStats(techStats);
+
+      const days = eachDayOfInterval({ start, end });
+      const dailyData: DailyStats[] = days.map(day => {
+        const dayStart = new Date(day);
+        dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(day);
+        dayEnd.setHours(23, 59, 59, 999);
+
+        const dayJobs = (completedJobs || []).filter(job => {
+          if (!job.completed_at) return false;
+          const completedDate = new Date(job.completed_at);
+          return completedDate >= dayStart && completedDate <= dayEnd;
+        }).length;
+
+        const dayHours = (clockEntries || []).reduce((sum, entry) => {
+          const entryDate = new Date(entry.clock_in);
+          if (entryDate >= dayStart && entryDate <= dayEnd) {
+            if (entry.total_hours) return sum + Number(entry.total_hours);
+            if (entry.clock_out) {
+              const clockIn = new Date(entry.clock_in);
+              const clockOut = new Date(entry.clock_out);
+              const hours = (clockOut.getTime() - clockIn.getTime()) / (1000 * 60 * 60);
+              return sum + hours;
+            }
+          }
+          return sum;
+        }, 0);
+
+        return {
+          date: format(day, "MMM dd"),
+          jobs_completed: dayJobs,
+          hours_worked: Math.round(dayHours * 10) / 10,
+        };
+      });
+
+      setDailyStats(dailyData);
+
+      const totalJobs = completedJobs?.length || 0;
+      const totalHours = techStats.reduce((sum, t) => sum + t.total_hours, 0);
+      const avgTime = techStats.length > 0
+        ? techStats.reduce((sum, t) => sum + t.avg_completion_time, 0) / techStats.length
+        : 0;
+      const avgEfficiency = techStats.length > 0
+        ? techStats.reduce((sum, t) => sum + t.completion_rate, 0) / techStats.length
+        : 0;
+
+      setTotalMetrics({
+        totalJobsCompleted: totalJobs,
+        avgCompletionTime: Math.round(avgTime * 10) / 10,
+        totalHoursWorked: Math.round(totalHours * 10) / 10,
+        teamEfficiency: Math.round(avgEfficiency),
+      });
+
     } catch (error) {
-      console.error("Error loading report data:", error);
+      console.error("Error loading reports data:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const COLORS = ["hsl(var(--primary))", "hsl(var(--warning))", "hsl(var(--success))", "hsl(var(--muted))"];
+  useEffect(() => {
+    loadReportsData();
+  }, [dateRange]);
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
+  const COLORS = ['hsl(var(--primary))', 'hsl(var(--success))', 'hsl(var(--warning))', 'hsl(var(--danger))', 'hsl(var(--accent))'];
+
+  const techPerformanceData = technicianStats.slice(0, 5).map(tech => ({
+    name: tech.full_name.split(' ')[0],
+    jobs: tech.jobs_completed,
+    hours: tech.total_hours,
+  }));
+
+  const completionRateData = [
+    { name: "Completed Tasks", value: technicianStats.reduce((sum, t) => sum + t.tasks_completed, 0) },
+    { name: "Pending Tasks", value: technicianStats.reduce((sum, t) => sum + (t.tasks_total - t.tasks_completed), 0) },
+  ];
+
   return (
     <div className="min-h-screen bg-background pb-20">
-      <div className="max-w-lg mx-auto p-4 space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Reports & Analytics</h1>
-            <p className="text-sm text-muted-foreground">Team performance metrics</p>
-          </div>
-          <Select value={period} onValueChange={setPeriod}>
-            <SelectTrigger className="w-32">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="today">Today</SelectItem>
-              <SelectItem value="week">This Week</SelectItem>
-              <SelectItem value="month">This Month</SelectItem>
-            </SelectContent>
-          </Select>
+      <div className="container mx-auto p-4 space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Reports & Analytics</h1>
+          <p className="text-muted-foreground">Team performance metrics and insights</p>
         </div>
 
-        {/* Key Metrics */}
+        <Tabs value={dateRange} onValueChange={(v) => setDateRange(v as DateRange)}>
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="daily">
+              <Calendar className="h-4 w-4 mr-2" />
+              Last 7 Days
+            </TabsTrigger>
+            <TabsTrigger value="weekly">
+              <Calendar className="h-4 w-4 mr-2" />
+              This Week
+            </TabsTrigger>
+            <TabsTrigger value="monthly">
+              <Calendar className="h-4 w-4 mr-2" />
+              This Month
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
         <div className="grid grid-cols-2 gap-4">
-          <Card className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-lg">
-                <Briefcase className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{stats.totalJobs}</p>
-                <p className="text-xs text-muted-foreground">Total Jobs</p>
-              </div>
-            </div>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-primary" />
+                Jobs Completed
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-foreground">{totalMetrics.totalJobsCompleted}</div>
+              <p className="text-xs text-muted-foreground mt-1">Total jobs finished</p>
+            </CardContent>
           </Card>
 
-          <Card className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-success/10 rounded-lg">
-                <CheckCircle className="h-5 w-5 text-success" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{stats.completedJobs}</p>
-                <p className="text-xs text-muted-foreground">Completed</p>
-              </div>
-            </div>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Clock className="h-4 w-4 text-primary" />
+                Avg Time
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-foreground">{totalMetrics.avgCompletionTime}h</div>
+              <p className="text-xs text-muted-foreground mt-1">Per job completion</p>
+            </CardContent>
           </Card>
 
-          <Card className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-warning/10 rounded-lg">
-                <Clock className="h-5 w-5 text-warning" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{stats.totalHours}</p>
-                <p className="text-xs text-muted-foreground">Total Hours</p>
-              </div>
-            </div>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Users className="h-4 w-4 text-primary" />
+                Team Hours
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-foreground">{totalMetrics.totalHoursWorked}h</div>
+              <p className="text-xs text-muted-foreground mt-1">Total worked</p>
+            </CardContent>
           </Card>
 
-          <Card className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-accent/10 rounded-lg">
-                <TrendingUp className="h-5 w-5 text-accent-foreground" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{stats.averageCompletionTime}</p>
-                <p className="text-xs text-muted-foreground">Avg Hours/Job</p>
-              </div>
-            </div>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-primary" />
+                Efficiency
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-foreground">{totalMetrics.teamEfficiency}%</div>
+              <p className="text-xs text-muted-foreground mt-1">Task completion rate</p>
+            </CardContent>
           </Card>
         </div>
 
-        {/* Job Status Distribution */}
-        {jobStatusData.length > 0 && (
-          <Card className="p-4">
-            <h3 className="font-semibold mb-4 text-foreground">Job Status Distribution</h3>
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie
-                  data={jobStatusData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {jobStatusData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
+        <Card>
+          <CardHeader>
+            <CardTitle>Job Completion Trend</CardTitle>
+            <CardDescription>Daily jobs completed over selected period</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={250}>
+              <LineChart data={dailyStats}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '0.5rem' }} />
+                <Line type="monotone" dataKey="jobs_completed" stroke="hsl(var(--primary))" strokeWidth={2} name="Jobs Completed" />
+              </LineChart>
             </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Top Performers</CardTitle>
+            <CardDescription>Jobs completed by top 5 technicians</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={techPerformanceData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '0.5rem' }} />
+                <Bar dataKey="jobs" fill="hsl(var(--primary))" name="Jobs Completed" />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {completionRateData[0].value + completionRateData[1].value > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Task Completion Status</CardTitle>
+              <CardDescription>Overall task completion across all jobs</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={250}>
+                <PieChart>
+                  <Pie
+                    data={completionRateData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                    outerRadius={80}
+                    fill="hsl(var(--primary))"
+                    dataKey="value"
+                  >
+                    {completionRateData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '0.5rem' }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </CardContent>
           </Card>
         )}
 
-        {/* Top Performing Staff */}
-        {staffPerformance.length > 0 && (
-          <Card className="p-4">
-            <h3 className="font-semibold mb-4 text-foreground">Top Performers - Jobs Completed</h3>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={staffPerformance}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="hsl(var(--foreground))" />
-                <YAxis stroke="hsl(var(--foreground))" />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: "hsl(var(--background))", 
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "8px"
-                  }} 
-                />
-                <Bar dataKey="jobsCompleted" fill="hsl(var(--primary))" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </Card>
-        )}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Award className="h-5 w-5 text-primary" />
+              Technician Leaderboard
+            </CardTitle>
+            <CardDescription>Ranked by jobs completed and performance metrics</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {technicianStats.map((tech, index) => (
+                <div key={tech.user_id} className="flex items-center justify-between p-4 rounded-lg bg-accent/5 border border-border">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/10 font-bold text-primary">
+                      {index + 1}
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-foreground">{tech.full_name}</h3>
+                      <div className="flex gap-3 mt-1 text-sm text-muted-foreground">
+                        <span className="flex items-center gap-1"><Target className="h-3 w-3" />{tech.jobs_completed} jobs</span>
+                        <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{tech.total_hours}h</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <Badge variant={tech.completion_rate >= 80 ? "default" : tech.completion_rate >= 60 ? "secondary" : "outline"}>
+                      {tech.completion_rate}% Tasks
+                    </Badge>
+                    <p className="text-xs text-muted-foreground mt-1">Avg: {tech.avg_completion_time}h/job</p>
+                  </div>
+                </div>
+              ))}
 
-        {/* Hours Worked */}
-        {staffPerformance.length > 0 && (
-          <Card className="p-4">
-            <h3 className="font-semibold mb-4 text-foreground">Hours Worked by Staff</h3>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={staffPerformance}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="hsl(var(--foreground))" />
-                <YAxis stroke="hsl(var(--foreground))" />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: "hsl(var(--background))", 
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "8px"
-                  }} 
-                />
-                <Bar dataKey="hoursWorked" fill="hsl(var(--warning))" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </Card>
-        )}
+              {technicianStats.length === 0 && (
+                <div className="text-center py-8 text-muted-foreground">
+                  No data available for selected period
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <SupervisorBottomNav />
