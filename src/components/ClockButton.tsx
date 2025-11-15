@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useSoundEffects } from "@/hooks/useSoundEffects";
 import { useGamification } from "@/hooks/useGamification";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 interface ClockEntry {
   id: string;
@@ -48,6 +49,7 @@ const ClockButton = () => {
   const { toast } = useToast();
   const { playSound } = useSoundEffects();
   const gamification = useGamification();
+  const pushNotifications = usePushNotifications();
 
   const triggerHaptic = (type: 'light' | 'medium' | 'heavy' = 'medium') => {
     if ('vibrate' in navigator) {
@@ -59,6 +61,18 @@ const ClockButton = () => {
       navigator.vibrate(patterns[type]);
     }
   };
+
+  // Request notification permission on mount
+  useEffect(() => {
+    if (pushNotifications.permission === 'default') {
+      pushNotifications.requestPermission();
+    }
+  }, []);
+
+  // Schedule daily streak reminder
+  useEffect(() => {
+    pushNotifications.scheduleStreakReminder();
+  }, []);
 
   useEffect(() => {
     checkActiveEntry();
@@ -243,6 +257,7 @@ const ClockButton = () => {
         const result = gamification.addXP(10);
         if (result.leveledUp) {
           playSound('levelUp');
+          pushNotifications.notifyLevelUp(result.newLevel, result.newXP);
           toast({
             title: "🎉 Level Up!",
             description: `You've reached level ${result.newLevel}!`,
@@ -250,7 +265,28 @@ const ClockButton = () => {
         }
       }
       
-      gamification.updateStreak();
+      const newStreak = gamification.updateStreak();
+      
+      // Check for Early Bird achievement (5 on-time clock-ins)
+      if (isOnTime) {
+        const onTimeCount = parseInt(localStorage.getItem('onTimeClockIns') || '0') + 1;
+        localStorage.setItem('onTimeClockIns', onTimeCount.toString());
+        
+        if (onTimeCount >= 5) {
+          const achievementResult = gamification.addAchievement('early_bird');
+          if (achievementResult.isNew && achievementResult.achievement) {
+            playSound('achievement');
+            pushNotifications.notifyAchievement(
+              achievementResult.achievement.name,
+              achievementResult.achievement.description
+            );
+            toast({
+              title: "🏆 Achievement Unlocked!",
+              description: achievementResult.achievement.name,
+            });
+          }
+        }
+      }
 
       toast({
         title: "✅ Clocked in",

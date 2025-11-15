@@ -10,6 +10,7 @@ import { Progress } from "@/components/ui/progress";
 import { XPBar } from "@/components/gamification/XPBar";
 import { StreakCounter } from "@/components/gamification/StreakCounter";
 import { useGamification } from "@/hooks/useGamification";
+import { NotificationPermissionBanner } from "@/components/NotificationPermissionBanner";
 
 interface Job {
   id: string;
@@ -173,6 +174,9 @@ const Home = () => {
       </div>
 
       <div className="p-4 space-y-5">
+        {/* Notification Permission Banner */}
+        <NotificationPermissionBanner />
+        
         {/* Gamification Section */}
         <Card className="glass neuro-shadow animate-bounce-in">
           <CardContent className="p-5 space-y-4">
