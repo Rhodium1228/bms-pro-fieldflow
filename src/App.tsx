@@ -13,6 +13,7 @@ import Calendar from "./pages/Calendar";
 import Profile from "./pages/Profile";
 import SupervisorHome from "./pages/supervisor/SupervisorHome";
 import JobManagement from "./pages/supervisor/JobManagement";
+import JobScheduler from "./pages/supervisor/JobScheduler";
 import Timesheets from "./pages/supervisor/Timesheets";
 import TeamTracking from "./pages/supervisor/TeamTracking";
 import Reports from "./pages/supervisor/Reports";
@@ -80,6 +81,16 @@ const App = () => (
               <ProtectedRoute>
                 <RoleGuard allowedRoles={["supervisor", "manager"]}>
                   <JobManagement />
+                </RoleGuard>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/supervisor/scheduler"
+            element={
+              <ProtectedRoute>
+                <RoleGuard allowedRoles={["supervisor", "manager"]}>
+                  <JobScheduler />
                 </RoleGuard>
               </ProtectedRoute>
             }
