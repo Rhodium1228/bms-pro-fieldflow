@@ -31,6 +31,7 @@ interface Job {
   notes: string | null;
   safety_checklist: ChecklistItem[];
   materials_checklist: ChecklistItem[];
+  work_progress: ChecklistItem[];
 }
 
 const statusColors = {
@@ -50,6 +51,7 @@ const TaskDetail = () => {
   const [photos, setPhotos] = useState<string[]>([]);
   const [safetyChecklist, setSafetyChecklist] = useState<ChecklistItem[]>([]);
   const [materialsChecklist, setMaterialsChecklist] = useState<ChecklistItem[]>([]);
+  const [workProgress, setWorkProgress] = useState<ChecklistItem[]>([]);
   const [showSignaturePad, setShowSignaturePad] = useState(false);
   const [signatureUrl, setSignatureUrl] = useState<string | null>(null);
 
@@ -71,6 +73,7 @@ const TaskDetail = () => {
       setNotes(data.notes || "");
       setSafetyChecklist((data.safety_checklist as any) || []);
       setMaterialsChecklist((data.materials_checklist as any) || []);
+      setWorkProgress((data.work_progress as any) || []);
       setSignatureUrl(data.signature_url || null);
     }
 
@@ -103,6 +106,24 @@ const TaskDetail = () => {
       await supabase
         .from("jobs")
         .update({ materials_checklist: items as any })
+        .eq("id", job.id);
+    }
+  };
+
+  const handleWorkProgressUpdate = async (items: ChecklistItem[]) => {
+    setWorkProgress(items);
+    if (job) {
+      // Calculate work completion percentage
+      const totalItems = items.length;
+      const completedItems = items.filter(item => item.completed).length;
+      const workCompletion = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+
+      await supabase
+        .from("jobs")
+        .update({ 
+          work_progress: items as any,
+          work_completion: workCompletion
+        })
         .eq("id", job.id);
     }
   };
@@ -281,6 +302,14 @@ const TaskDetail = () => {
             />
           </CardContent>
         </Card>
+
+        {workProgress.length > 0 && (
+          <Checklist
+            title="Work Progress"
+            items={workProgress}
+            onUpdate={handleWorkProgressUpdate}
+          />
+        )}
 
         <Checklist
           title="Safety Requirements"
