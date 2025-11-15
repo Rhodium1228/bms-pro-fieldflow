@@ -9,6 +9,46 @@ interface GamificationData {
   achievements: string[];
 }
 
+interface AchievementInfo {
+  id: string;
+  name: string;
+  description: string;
+  requirement: string;
+}
+
+const ACHIEVEMENTS: Record<string, AchievementInfo> = {
+  task_master: {
+    id: 'task_master',
+    name: 'Task Master',
+    description: 'Complete your first job successfully',
+    requirement: 'Complete 1 job',
+  },
+  early_bird: {
+    id: 'early_bird',
+    name: 'Early Bird',
+    description: 'Clock in on time 5 times',
+    requirement: 'Clock in on time 5 times',
+  },
+  perfect_week: {
+    id: 'perfect_week',
+    name: 'Perfect Week',
+    description: 'Maintain a 5-day streak',
+    requirement: '5-day streak',
+  },
+  five_star: {
+    id: 'five_star',
+    name: '5-Star Technician',
+    description: 'Complete 20 jobs successfully',
+    requirement: 'Complete 20 jobs',
+  },
+  speed_demon: {
+    id: 'speed_demon',
+    name: 'Speed Demon',
+    description: 'Complete 5 jobs ahead of schedule',
+    requirement: 'Complete 5 jobs early',
+  },
+};
+
 export const useGamification = () => {
   const [data, setData] = useState<GamificationData>({
     xp: 0,
@@ -48,10 +88,10 @@ export const useGamification = () => {
     if (newXP >= xpToNextLevel) {
       const newLevel = data.level + 1;
       saveData({ ...data, xp: newXP - xpToNextLevel, level: newLevel });
-      return { leveledUp: true, newLevel };
+      return { leveledUp: true, newLevel, newXP: newXP - xpToNextLevel };
     } else {
       saveData({ ...data, xp: newXP });
-      return { leveledUp: false };
+      return { leveledUp: false, newXP };
     }
   };
 
@@ -59,19 +99,34 @@ export const useGamification = () => {
     const today = new Date().toDateString();
     const yesterday = new Date(Date.now() - 86400000).toDateString();
     
+    let newStreak = data.streak;
+    
     if (data.lastClockIn === yesterday) {
-      saveData({ ...data, streak: data.streak + 1, lastClockIn: today });
+      newStreak = data.streak + 1;
+      saveData({ ...data, streak: newStreak, lastClockIn: today });
+      
+      // Check for Perfect Week achievement
+      if (newStreak >= 5 && !data.achievements.includes('perfect_week')) {
+        addAchievement('perfect_week');
+      }
     } else if (data.lastClockIn !== today) {
-      saveData({ ...data, streak: 1, lastClockIn: today });
+      newStreak = 1;
+      saveData({ ...data, streak: newStreak, lastClockIn: today });
     }
+    
+    return newStreak;
   };
 
-  const addAchievement = (achievement: string) => {
-    if (!data.achievements.includes(achievement)) {
-      saveData({ ...data, achievements: [...data.achievements, achievement] });
-      return true;
+  const addAchievement = (achievementId: string) => {
+    if (!data.achievements.includes(achievementId)) {
+      saveData({ ...data, achievements: [...data.achievements, achievementId] });
+      return { isNew: true, achievement: ACHIEVEMENTS[achievementId] };
     }
-    return false;
+    return { isNew: false };
+  };
+
+  const getAchievementInfo = (achievementId: string): AchievementInfo | undefined => {
+    return ACHIEVEMENTS[achievementId];
   };
 
   const xpToNextLevel = data.level * 100;
@@ -82,5 +137,7 @@ export const useGamification = () => {
     addXP,
     updateStreak,
     addAchievement,
+    getAchievementInfo,
+    allAchievements: ACHIEVEMENTS,
   };
 };

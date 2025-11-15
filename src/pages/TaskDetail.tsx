@@ -15,6 +15,7 @@ import SignaturePad from "@/components/SignaturePad";
 import { useSoundEffects } from "@/hooks/useSoundEffects";
 import { useGamification } from "@/hooks/useGamification";
 import { Confetti } from "@/components/Confetti";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 interface ChecklistItem {
   item: string;
@@ -60,6 +61,7 @@ const TaskDetail = () => {
   const [showConfetti, setShowConfetti] = useState(false);
   const { playSound } = useSoundEffects();
   const gamification = useGamification();
+  const pushNotifications = usePushNotifications();
 
   const triggerHaptic = (type: 'light' | 'medium' | 'heavy' = 'medium') => {
     if ('vibrate' in navigator) {
@@ -145,6 +147,7 @@ const TaskDetail = () => {
         const result = gamification.addXP(20);
         if (result.leveledUp) {
           playSound('levelUp');
+          pushNotifications.notifyLevelUp(result.newLevel, result.newXP);
           toast({
             title: "🎉 Level Up!",
             description: `You've reached level ${result.newLevel}!`,
@@ -216,10 +219,51 @@ const TaskDetail = () => {
         
         if (result.leveledUp) {
           playSound('levelUp');
+          pushNotifications.notifyLevelUp(result.newLevel, result.newXP);
         }
         
         // Check for achievements
-        const isNewAchievement = gamification.addAchievement('task_master');
+        const taskMasterResult = gamification.addAchievement('task_master');
+        if (taskMasterResult.isNew && taskMasterResult.achievement) {
+          playSound('achievement');
+          pushNotifications.notifyAchievement(
+            taskMasterResult.achievement.name,
+            taskMasterResult.achievement.description
+          );
+        }
+        
+        // Track completed jobs for achievements
+        const completedJobs = parseInt(localStorage.getItem('completedJobs') || '0') + 1;
+        localStorage.setItem('completedJobs', completedJobs.toString());
+        
+        // Check for 5-Star Technician achievement
+        if (completedJobs >= 20) {
+          const fiveStarResult = gamification.addAchievement('five_star');
+          if (fiveStarResult.isNew && fiveStarResult.achievement) {
+            playSound('achievement');
+            pushNotifications.notifyAchievement(
+              fiveStarResult.achievement.name,
+              fiveStarResult.achievement.description
+            );
+          }
+        }
+        
+        // Track early completions for Speed Demon achievement
+        if (completedEarly) {
+          const earlyCompletions = parseInt(localStorage.getItem('earlyCompletions') || '0') + 1;
+          localStorage.setItem('earlyCompletions', earlyCompletions.toString());
+          
+          if (earlyCompletions >= 5) {
+            const speedDemonResult = gamification.addAchievement('speed_demon');
+            if (speedDemonResult.isNew && speedDemonResult.achievement) {
+              playSound('achievement');
+              pushNotifications.notifyAchievement(
+                speedDemonResult.achievement.name,
+                speedDemonResult.achievement.description
+              );
+            }
+          }
+        }
         
         toast({
           title: "🎉 Job Completed!",
