@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { useSoundEffects } from "@/hooks/useSoundEffects";
+import { useGamification } from "@/hooks/useGamification";
 
 interface ClockEntry {
   id: string;
@@ -44,6 +46,19 @@ const ClockButton = () => {
   const [notes, setNotes] = useState("");
   const locationIntervalRef = useRef<number | null>(null);
   const { toast } = useToast();
+  const { playSound } = useSoundEffects();
+  const gamification = useGamification();
+
+  const triggerHaptic = (type: 'light' | 'medium' | 'heavy' = 'medium') => {
+    if ('vibrate' in navigator) {
+      const patterns = {
+        light: 10,
+        medium: 20,
+        heavy: [30, 10, 30]
+      };
+      navigator.vibrate(patterns[type]);
+    }
+  };
 
   useEffect(() => {
     checkActiveEntry();
@@ -205,6 +220,8 @@ const ClockButton = () => {
       });
 
       if (error) {
+        playSound('error');
+        triggerHaptic('heavy');
         toast({
           title: "Error",
           description: "Failed to clock in",
@@ -213,14 +230,38 @@ const ClockButton = () => {
         return;
       }
 
+      // Success feedback
+      playSound('success');
+      triggerHaptic('medium');
+      
+      // Update gamification
+      const now = new Date();
+      const scheduledTime = todaysJobs?.[0]?.scheduled_start ? new Date(todaysJobs[0].scheduled_start) : null;
+      const isOnTime = scheduledTime ? now <= scheduledTime : true;
+      
+      if (isOnTime) {
+        const result = gamification.addXP(10);
+        if (result.leveledUp) {
+          playSound('levelUp');
+          toast({
+            title: "🎉 Level Up!",
+            description: `You've reached level ${result.newLevel}!`,
+          });
+        }
+      }
+      
+      gamification.updateStreak();
+
       toast({
-        title: "Clocked in",
-        description: `${warningMessage}Clocked in at ${format(new Date(), "h:mm a")}`,
+        title: "✅ Clocked in",
+        description: `${warningMessage}Clocked in at ${format(new Date(), "h:mm a")}${isOnTime ? ' +10 XP!' : ''}`,
       });
       checkActiveEntry();
       setShowNotesDialog(false);
       setNotes("");
     } catch (error) {
+      playSound('error');
+      triggerHaptic('heavy');
       toast({
         title: "Location Required",
         description: "Please enable location services to clock in",
@@ -250,6 +291,8 @@ const ClockButton = () => {
       .eq("id", activeEntry.id);
 
     if (error) {
+      playSound('error');
+      triggerHaptic('heavy');
       toast({
         title: "Error",
         description: "Failed to clock out",
@@ -258,8 +301,12 @@ const ClockButton = () => {
       return;
     }
 
+    // Success feedback
+    playSound('success');
+    triggerHaptic('medium');
+
     toast({
-      title: "Clocked out",
+      title: "👋 Clocked out",
       description: `See you tomorrow! Clocked out at ${format(new Date(), "h:mm a")}`,
     });
     setActiveEntry(null);
@@ -288,6 +335,8 @@ const ClockButton = () => {
         .eq("id", activeEntry.id);
 
       if (error) {
+        playSound('error');
+        triggerHaptic('heavy');
         toast({
           title: "Error",
           description: "Failed to end break",
@@ -296,8 +345,10 @@ const ClockButton = () => {
         return;
       }
 
+      playSound('success');
+      triggerHaptic('light');
       toast({
-        title: "Break ended",
+        title: "💪 Break ended",
         description: "Back to work!",
       });
       setIsOnBreak(false);
@@ -320,6 +371,8 @@ const ClockButton = () => {
         .eq("id", activeEntry.id);
 
       if (error) {
+        playSound('error');
+        triggerHaptic('heavy');
         toast({
           title: "Error",
           description: "Failed to start break",
@@ -328,8 +381,10 @@ const ClockButton = () => {
         return;
       }
 
+      playSound('click');
+      triggerHaptic('light');
       toast({
-        title: "Break started",
+        title: "☕ Break started",
         description: "Enjoy your break!",
       });
       setIsOnBreak(true);
@@ -370,27 +425,27 @@ const ClockButton = () => {
   if (!activeEntry) {
     return (
       <>
-        <div className="space-y-2">
+        <div className="space-y-3">
           <Button 
             onClick={() => openNotesDialog("clock-in")} 
             size="lg" 
-            className="w-full"
+            className="w-full h-16 text-lg font-bold hover:scale-105 transition-all shadow-lg hover:shadow-xl animate-pulse-glow"
             disabled={isGettingLocation}
           >
-            <Clock className="mr-2 h-5 w-5" />
-            {isGettingLocation ? "Getting Location..." : "Clock In"}
+            <Clock className="mr-2 h-6 w-6" />
+            {isGettingLocation ? "🔍 Getting Location..." : "🚀 Clock In"}
           </Button>
           
           {currentLocation && (
-            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-              <MapPin className="h-3 w-3" />
-              <span>Location ready (±{Math.round(currentLocation.accuracy)}m)</span>
+            <div className="flex items-center justify-center gap-2 text-sm text-success font-medium glass p-2 rounded-lg">
+              <MapPin className="h-4 w-4" />
+              <span>✅ Location ready (±{Math.round(currentLocation.accuracy)}m)</span>
             </div>
           )}
           
           {locationError && (
-            <div className="flex items-center justify-center gap-2 text-sm text-destructive">
-              <AlertCircle className="h-3 w-3" />
+            <div className="flex items-center justify-center gap-2 text-sm text-destructive glass p-2 rounded-lg animate-shake">
+              <AlertCircle className="h-4 w-4" />
               <span>{locationError}</span>
             </div>
           )}
@@ -435,27 +490,31 @@ const ClockButton = () => {
 
   return (
     <>
-      <div className="space-y-2">
-        <div className="flex gap-2">
+      <div className="space-y-3">
+        <div className="flex gap-3">
           <Button
             onClick={() => openNotesDialog(isOnBreak ? "break-end" : "break-start")}
             variant={isOnBreak ? "default" : "outline"}
-            className="flex-1"
+            className="flex-1 h-14 text-base font-semibold hover:scale-105 transition-transform"
           >
-            <Coffee className="mr-2 h-4 w-4" />
-            {isOnBreak ? "End Break" : "Start Break"}
+            <Coffee className="mr-2 h-5 w-5" />
+            {isOnBreak ? "☕ End Break" : "☕ Start Break"}
           </Button>
-          <Button onClick={() => openNotesDialog("clock-out")} variant="destructive" className="flex-1">
-            <Clock className="mr-2 h-4 w-4" />
-            Clock Out
+          <Button 
+            onClick={() => openNotesDialog("clock-out")} 
+            variant="destructive" 
+            className="flex-1 h-14 text-base font-semibold hover:scale-105 transition-transform shadow-lg"
+          >
+            <Clock className="mr-2 h-5 w-5" />
+            👋 Clock Out
           </Button>
         </div>
         
         {currentLocation && (
-          <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-            <MapPin className="h-3 w-3" />
+          <div className="flex items-center justify-center gap-2 text-sm text-success font-medium glass p-2 rounded-lg">
+            <MapPin className="h-4 w-4" />
             <span>
-              Tracking location • Last update: {activeEntry.last_location_update 
+              📍 Tracking location • Last update: {activeEntry.last_location_update 
                 ? format(new Date(activeEntry.last_location_update), "h:mm a")
                 : "Now"}
             </span>
