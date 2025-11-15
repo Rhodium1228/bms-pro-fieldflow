@@ -4,6 +4,16 @@ import { Clock, Coffee, MapPin, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 
 interface ClockEntry {
   id: string;
@@ -14,6 +24,7 @@ interface ClockEntry {
   location_lat: number | null;
   location_lng: number | null;
   last_location_update: string | null;
+  notes: string | null;
 }
 
 interface Location {
@@ -28,6 +39,9 @@ const ClockButton = () => {
   const [currentLocation, setCurrentLocation] = useState<Location | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
+  const [showNotesDialog, setShowNotesDialog] = useState(false);
+  const [notesAction, setNotesAction] = useState<"clock-in" | "clock-out" | "break-start" | "break-end" | null>(null);
+  const [notes, setNotes] = useState("");
   const locationIntervalRef = useRef<number | null>(null);
   const { toast } = useToast();
 
@@ -156,7 +170,7 @@ const ClockButton = () => {
     }
   };
 
-  const handleClockIn = async () => {
+  const handleClockIn = async (noteText?: string) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
@@ -187,6 +201,7 @@ const ClockButton = () => {
         location_lat: location.lat,
         location_lng: location.lng,
         last_location_update: new Date().toISOString(),
+        notes: noteText || null,
       });
 
       if (error) {
@@ -203,6 +218,8 @@ const ClockButton = () => {
         description: `${warningMessage}Clocked in at ${format(new Date(), "h:mm a")}`,
       });
       checkActiveEntry();
+      setShowNotesDialog(false);
+      setNotes("");
     } catch (error) {
       toast({
         title: "Location Required",
@@ -214,12 +231,22 @@ const ClockButton = () => {
     }
   };
 
-  const handleClockOut = async () => {
+  const handleClockOut = async (noteText?: string) => {
     if (!activeEntry) return;
+
+    const updateData: any = { 
+      clock_out: new Date().toISOString() 
+    };
+    
+    if (noteText) {
+      updateData.notes = activeEntry.notes 
+        ? `${activeEntry.notes}\n\nClock Out: ${noteText}`
+        : `Clock Out: ${noteText}`;
+    }
 
     const { error } = await supabase
       .from("clock_entries")
-      .update({ clock_out: new Date().toISOString() })
+      .update(updateData)
       .eq("id", activeEntry.id);
 
     if (error) {
@@ -237,15 +264,27 @@ const ClockButton = () => {
     });
     setActiveEntry(null);
     setIsOnBreak(false);
+    setShowNotesDialog(false);
+    setNotes("");
   };
 
-  const handleBreak = async () => {
+  const handleBreak = async (noteText?: string) => {
     if (!activeEntry) return;
 
     if (isOnBreak) {
+      const updateData: any = { 
+        break_end: new Date().toISOString() 
+      };
+      
+      if (noteText) {
+        updateData.notes = activeEntry.notes 
+          ? `${activeEntry.notes}\n\nBreak End: ${noteText}`
+          : `Break End: ${noteText}`;
+      }
+
       const { error } = await supabase
         .from("clock_entries")
-        .update({ break_end: new Date().toISOString() })
+        .update(updateData)
         .eq("id", activeEntry.id);
 
       if (error) {
@@ -262,10 +301,22 @@ const ClockButton = () => {
         description: "Back to work!",
       });
       setIsOnBreak(false);
+      setShowNotesDialog(false);
+      setNotes("");
     } else {
+      const updateData: any = { 
+        break_start: new Date().toISOString() 
+      };
+      
+      if (noteText) {
+        updateData.notes = activeEntry.notes 
+          ? `${activeEntry.notes}\n\nBreak Start: ${noteText}`
+          : `Break Start: ${noteText}`;
+      }
+
       const { error } = await supabase
         .from("clock_entries")
-        .update({ break_start: new Date().toISOString() })
+        .update(updateData)
         .eq("id", activeEntry.id);
 
       if (error) {
@@ -282,67 +333,170 @@ const ClockButton = () => {
         description: "Enjoy your break!",
       });
       setIsOnBreak(true);
+      setShowNotesDialog(false);
+      setNotes("");
+    }
+  };
+
+  const openNotesDialog = (action: "clock-in" | "clock-out" | "break-start" | "break-end") => {
+    setNotesAction(action);
+    setShowNotesDialog(true);
+  };
+
+  const handleNotesSubmit = () => {
+    if (notesAction === "clock-in") {
+      handleClockIn(notes);
+    } else if (notesAction === "clock-out") {
+      handleClockOut(notes);
+    } else if (notesAction === "break-start") {
+      handleBreak(notes);
+    } else if (notesAction === "break-end") {
+      handleBreak(notes);
+    }
+  };
+
+  const handleSkipNotes = () => {
+    if (notesAction === "clock-in") {
+      handleClockIn();
+    } else if (notesAction === "clock-out") {
+      handleClockOut();
+    } else if (notesAction === "break-start") {
+      handleBreak();
+    } else if (notesAction === "break-end") {
+      handleBreak();
     }
   };
 
   if (!activeEntry) {
     return (
-      <div className="space-y-2">
-        <Button 
-          onClick={handleClockIn} 
-          size="lg" 
-          className="w-full"
-          disabled={isGettingLocation}
-        >
-          <Clock className="mr-2 h-5 w-5" />
-          {isGettingLocation ? "Getting Location..." : "Clock In"}
-        </Button>
-        
-        {currentLocation && (
-          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-            <MapPin className="h-3 w-3" />
-            <span>Location ready (±{Math.round(currentLocation.accuracy)}m)</span>
-          </div>
-        )}
-        
-        {locationError && (
-          <div className="flex items-center justify-center gap-2 text-sm text-destructive">
-            <AlertCircle className="h-3 w-3" />
-            <span>{locationError}</span>
-          </div>
-        )}
-      </div>
+      <>
+        <div className="space-y-2">
+          <Button 
+            onClick={() => openNotesDialog("clock-in")} 
+            size="lg" 
+            className="w-full"
+            disabled={isGettingLocation}
+          >
+            <Clock className="mr-2 h-5 w-5" />
+            {isGettingLocation ? "Getting Location..." : "Clock In"}
+          </Button>
+          
+          {currentLocation && (
+            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+              <MapPin className="h-3 w-3" />
+              <span>Location ready (±{Math.round(currentLocation.accuracy)}m)</span>
+            </div>
+          )}
+          
+          {locationError && (
+            <div className="flex items-center justify-center gap-2 text-sm text-destructive">
+              <AlertCircle className="h-3 w-3" />
+              <span>{locationError}</span>
+            </div>
+          )}
+        </div>
+
+        <Dialog open={showNotesDialog} onOpenChange={setShowNotesDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                {notesAction === "clock-in" && "Clock In"}
+                {notesAction === "clock-out" && "Clock Out"}
+                {notesAction === "break-start" && "Start Break"}
+                {notesAction === "break-end" && "End Break"}
+              </DialogTitle>
+              <DialogDescription>
+                Add an optional note (e.g., "Running late due to traffic")
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2">
+              <Label htmlFor="notes">Notes (Optional)</Label>
+              <Textarea
+                id="notes"
+                placeholder="Add any notes here..."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={4}
+              />
+            </div>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button variant="outline" onClick={handleSkipNotes}>
+                Skip
+              </Button>
+              <Button onClick={handleNotesSubmit}>
+                Confirm
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </>
     );
   }
 
   return (
-    <div className="space-y-2">
-      <div className="flex gap-2">
-        <Button
-          onClick={handleBreak}
-          variant={isOnBreak ? "default" : "outline"}
-          className="flex-1"
-        >
-          <Coffee className="mr-2 h-4 w-4" />
-          {isOnBreak ? "End Break" : "Start Break"}
-        </Button>
-        <Button onClick={handleClockOut} variant="destructive" className="flex-1">
-          <Clock className="mr-2 h-4 w-4" />
-          Clock Out
-        </Button>
-      </div>
-      
-      {currentLocation && (
-        <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-          <MapPin className="h-3 w-3" />
-          <span>
-            Tracking location • Last update: {activeEntry.last_location_update 
-              ? format(new Date(activeEntry.last_location_update), "h:mm a")
-              : "Now"}
-          </span>
+    <>
+      <div className="space-y-2">
+        <div className="flex gap-2">
+          <Button
+            onClick={() => openNotesDialog(isOnBreak ? "break-end" : "break-start")}
+            variant={isOnBreak ? "default" : "outline"}
+            className="flex-1"
+          >
+            <Coffee className="mr-2 h-4 w-4" />
+            {isOnBreak ? "End Break" : "Start Break"}
+          </Button>
+          <Button onClick={() => openNotesDialog("clock-out")} variant="destructive" className="flex-1">
+            <Clock className="mr-2 h-4 w-4" />
+            Clock Out
+          </Button>
         </div>
-      )}
-    </div>
+        
+        {currentLocation && (
+          <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+            <MapPin className="h-3 w-3" />
+            <span>
+              Tracking location • Last update: {activeEntry.last_location_update 
+                ? format(new Date(activeEntry.last_location_update), "h:mm a")
+                : "Now"}
+            </span>
+          </div>
+        )}
+      </div>
+
+      <Dialog open={showNotesDialog} onOpenChange={setShowNotesDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {notesAction === "clock-in" && "Clock In"}
+              {notesAction === "clock-out" && "Clock Out"}
+              {notesAction === "break-start" && "Start Break"}
+              {notesAction === "break-end" && "End Break"}
+            </DialogTitle>
+            <DialogDescription>
+              Add an optional note (e.g., "Took extended lunch break")
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="notes">Notes (Optional)</Label>
+            <Textarea
+              id="notes"
+              placeholder="Add any notes here..."
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={4}
+            />
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={handleSkipNotes}>
+              Skip
+            </Button>
+            <Button onClick={handleNotesSubmit}>
+              Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 

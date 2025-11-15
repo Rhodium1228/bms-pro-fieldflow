@@ -30,6 +30,7 @@ export type Database = {
           last_location_update: string | null
           location_lat: number | null
           location_lng: number | null
+          notes: string | null
           total_hours: number | null
           user_id: string
         }
@@ -48,6 +49,7 @@ export type Database = {
           last_location_update?: string | null
           location_lat?: number | null
           location_lng?: number | null
+          notes?: string | null
           total_hours?: number | null
           user_id: string
         }
@@ -66,6 +68,7 @@ export type Database = {
           last_location_update?: string | null
           location_lat?: number | null
           location_lng?: number | null
+          notes?: string | null
           total_hours?: number | null
           user_id?: string
         }
