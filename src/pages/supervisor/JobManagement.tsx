@@ -3,12 +3,13 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import SupervisorBottomNav from "@/components/supervisor/SupervisorBottomNav";
 import JobForm from "@/components/supervisor/JobForm";
+import { ReassignJobDialog } from "@/components/supervisor/ReassignJobDialog";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Search, Plus, Filter } from "lucide-react";
+import { Search, Plus, Filter, UserCheck } from "lucide-react";
 
 interface Job {
   id: string;
@@ -33,6 +34,8 @@ const JobManagement = () => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showReassignDialog, setShowReassignDialog] = useState(false);
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
 
   useEffect(() => {
     if (searchParams.get("create") === "true") {
@@ -44,6 +47,28 @@ const JobManagement = () => {
 
   useEffect(() => {
     loadJobs();
+  }, [statusFilter, priorityFilter]);
+
+  useEffect(() => {
+    // Set up real-time subscription for job updates
+    const channel = supabase
+      .channel('jobs-management-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'jobs'
+        },
+        () => {
+          loadJobs();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [statusFilter, priorityFilter]);
 
   const loadJobs = async () => {
@@ -192,44 +217,64 @@ const JobManagement = () => {
             </Card>
           ) : (
             filteredJobs.map((job) => (
-              <Card
-                key={job.id}
-                className="p-4 cursor-pointer hover:bg-accent/50 transition-colors"
-                onClick={() => navigate(`/tasks/${job.id}`)}
-              >
-                <div className="flex justify-between items-start mb-3">
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-foreground">{job.customer_name}</h3>
-                    <p className="text-sm text-muted-foreground">{job.customer_address}</p>
+              <Card key={job.id} className="p-4">
+                <div 
+                  className="cursor-pointer hover:bg-accent/10 -m-4 p-4 rounded-lg transition-colors"
+                  onClick={() => navigate(`/tasks/${job.id}`)}
+                >
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-foreground">{job.customer_name}</h3>
+                      <p className="text-sm text-muted-foreground">{job.customer_address}</p>
+                    </div>
+                    <span className={`text-xs font-semibold ${getPriorityColor(job.priority)}`}>
+                      {job.priority?.toUpperCase()}
+                    </span>
                   </div>
-                  <span className={`text-xs font-semibold ${getPriorityColor(job.priority)}`}>
-                    {job.priority?.toUpperCase()}
-                  </span>
-                </div>
-                <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
-                  {job.job_description}
-                </p>
-                <div className="flex items-center justify-between">
-                  <div className="text-xs">
-                    <p className="text-muted-foreground">
-                      Assigned: {job.profiles?.full_name || "Unassigned"}
-                    </p>
-                    <p className="text-muted-foreground">
-                      {new Date(job.scheduled_start).toLocaleDateString()} at{" "}
-                      {new Date(job.scheduled_start).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </p>
+                  <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
+                    {job.job_description}
+                  </p>
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs">
+                      <p className="text-muted-foreground">
+                        Assigned: {job.profiles?.full_name || "Unassigned"}
+                      </p>
+                      <p className="text-muted-foreground">
+                        {new Date(job.scheduled_start).toLocaleDateString()} at{" "}
+                        {new Date(job.scheduled_start).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                    </div>
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(
+                        job.status
+                      )}`}
+                    >
+                      {job.status?.replace("_", " ")}
+                    </span>
                   </div>
-                  <span
-                    className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(
-                      job.status
-                    )}`}
-                  >
-                    {job.status?.replace("_", " ")}
-                  </span>
                 </div>
+                
+                {/* Reassign Button */}
+                {job.status !== "completed" && (
+                  <div className="mt-3 pt-3 border-t">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedJob(job);
+                        setShowReassignDialog(true);
+                      }}
+                    >
+                      <UserCheck className="h-4 w-4 mr-2" />
+                      Reassign Job
+                    </Button>
+                  </div>
+                )}
               </Card>
             ))
           )}
@@ -250,6 +295,13 @@ const JobManagement = () => {
           />
         </DialogContent>
       </Dialog>
+
+      <ReassignJobDialog
+        job={selectedJob}
+        open={showReassignDialog}
+        onOpenChange={setShowReassignDialog}
+        onSuccess={loadJobs}
+      />
 
       <SupervisorBottomNav />
     </div>

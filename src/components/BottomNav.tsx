@@ -1,6 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import { Home, ListTodo, Calendar, User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { NotificationBell } from "@/components/NotificationBell";
 
 const BottomNav = () => {
   const location = useLocation();
@@ -14,7 +15,7 @@ const BottomNav = () => {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50">
-      <div className="flex justify-around items-center h-16 max-w-lg mx-auto">
+      <div className="flex justify-around items-center h-16 max-w-lg mx-auto relative">
         {navItems.map(({ icon: Icon, label, path }) => {
           const isActive = location.pathname === path;
           return (
@@ -33,6 +34,11 @@ const BottomNav = () => {
             </Link>
           );
         })}
+        
+        {/* Notification Bell */}
+        <div className="absolute right-4 top-1/2 -translate-y-1/2">
+          <NotificationBell />
+        </div>
       </div>
     </nav>
   );
