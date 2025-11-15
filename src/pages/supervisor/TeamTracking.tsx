@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import SupervisorBottomNav from "@/components/supervisor/SupervisorBottomNav";
 import TeamMap from "@/components/supervisor/TeamMap";
+import { LocationUpdateIndicator } from "@/components/supervisor/LocationUpdateIndicator";
 import { Loader2, User, Clock, MapPin, Briefcase, Coffee, AlertCircle, Navigation, Map, List } from "lucide-react";
 
 interface TechnicianStatus {
@@ -34,6 +35,30 @@ const TeamTracking = () => {
   const [technicians, setTechnicians] = useState<TechnicianStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"map" | "list">("map");
+
+  useEffect(() => {
+    // Set up real-time subscription for clock entries
+    const channel = supabase
+      .channel('clock-entries-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'clock_entries'
+        },
+        (payload) => {
+          console.log('Clock entry updated:', payload);
+          // Reload technician status when clock entries change
+          loadTechnicianStatus();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const loadTechnicianStatus = async () => {
     try {
@@ -178,11 +203,99 @@ const TeamTracking = () => {
 
   const TechCard = ({ tech }: { tech: TechnicianStatus }) => (
     <Card className="p-4 space-y-3">
-      <div className="flex items-start justify-between"><div className="flex items-center gap-3"><div className="p-2 bg-accent/10 rounded-lg">{getStatusIcon(tech.status)}</div><div><h3 className="font-semibold text-foreground">{tech.full_name}</h3>{getStatusBadge(tech.status)}</div></div></div>
-      {tech.current_job && (<div className="space-y-2 p-3 bg-accent/5 rounded-lg"><div className="flex items-center gap-2"><Briefcase className="h-4 w-4 text-primary" /><span className="font-medium text-foreground">{tech.current_job}</span></div>{tech.job_address && (<div className="flex items-center gap-2 text-sm"><MapPin className="h-4 w-4 text-muted-foreground" /><span className="text-muted-foreground">{tech.job_address}</span></div>)}{tech.task_progress && (<div className="space-y-1"><div className="flex items-center justify-between text-sm"><span className="text-muted-foreground">Tasks:</span><span className="font-medium">{tech.task_progress.completed}/{tech.task_progress.total} completed ({tech.task_progress.percentage}%)</span></div><Progress value={tech.task_progress.percentage} className={`h-2 ${getProgressColor(tech.task_progress.percentage)}`} /></div>)}{tech.distance_from_job !== null && (<div className="flex items-center gap-2 text-sm"><Navigation className="h-4 w-4 text-muted-foreground" /><span className="text-muted-foreground">{tech.distance_from_job < 0.05 ? "📍 At job site" : `${tech.distance_from_job.toFixed(2)} km from site`}</span></div>)}</div>)}
-      {tech.clock_in_time && tech.status !== "clocked_out" && (<div className="grid grid-cols-2 gap-2 text-sm"><div className="flex items-center gap-2"><Clock className="h-4 w-4 text-primary" /><div><p className="text-xs text-muted-foreground">Clocked In</p><p className="font-medium">{calculateWorkDuration(tech.clock_in_time)}</p></div></div>{tech.break_duration !== null && tech.break_duration > 0 && (<div className="flex items-center gap-2"><Coffee className="h-4 w-4 text-warning" /><div><p className="text-xs text-muted-foreground">Break Time</p><p className="font-medium">{tech.break_duration}m today</p></div></div>)}</div>)}
-      {tech.last_update && (<div className="flex items-center justify-between text-xs text-muted-foreground border-t pt-2"><span>Last GPS update:</span><span>{formatLastUpdate(tech.last_update)}</span></div>)}
-      {!tech.current_job && tech.status === "clocked_in" && (<Alert><AlertCircle className="h-4 w-4" /><AlertDescription>No active job assigned</AlertDescription></Alert>)}
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-accent/10 rounded-lg">
+            {getStatusIcon(tech.status)}
+          </div>
+          <div>
+            <h3 className="font-semibold text-foreground">{tech.full_name}</h3>
+            <div className="flex gap-2 items-center mt-1">
+              {getStatusBadge(tech.status)}
+              <LocationUpdateIndicator lastUpdate={tech.last_update} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {tech.current_job && (
+        <div className="space-y-2 p-3 bg-accent/5 rounded-lg">
+          <div className="flex items-center gap-2">
+            <Briefcase className="h-4 w-4 text-primary" />
+            <span className="font-medium text-foreground">{tech.current_job}</span>
+          </div>
+          
+          {tech.job_address && (
+            <div className="flex items-center gap-2 text-sm">
+              <MapPin className="h-4 w-4 text-muted-foreground" />
+              <span className="text-muted-foreground">{tech.job_address}</span>
+            </div>
+          )}
+          
+          {tech.task_progress && (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Tasks:</span>
+                <span className="font-medium">
+                  {tech.task_progress.completed}/{tech.task_progress.total} completed ({tech.task_progress.percentage}%)
+                </span>
+              </div>
+              <Progress 
+                value={tech.task_progress.percentage} 
+                className={`h-2 ${getProgressColor(tech.task_progress.percentage)}`} 
+              />
+            </div>
+          )}
+          
+          {tech.distance_from_job !== null && (
+            <div className="flex items-center gap-2 text-sm">
+              <Navigation className="h-4 w-4 text-muted-foreground" />
+              <span className="text-muted-foreground">
+                {tech.distance_from_job < 0.05 
+                  ? "📍 At job site" 
+                  : `${tech.distance_from_job.toFixed(2)} km from site`
+                }
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+      
+      {tech.clock_in_time && tech.status !== "clocked_out" && (
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-primary" />
+            <div>
+              <p className="text-xs text-muted-foreground">Clocked In</p>
+              <p className="font-medium">{calculateWorkDuration(tech.clock_in_time)}</p>
+            </div>
+          </div>
+          
+          {tech.break_duration !== null && tech.break_duration > 0 && (
+            <div className="flex items-center gap-2">
+              <Coffee className="h-4 w-4 text-warning" />
+              <div>
+                <p className="text-xs text-muted-foreground">Break Time</p>
+                <p className="font-medium">{tech.break_duration}m today</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      
+      {tech.last_update && (
+        <div className="flex items-center justify-between text-xs text-muted-foreground border-t pt-2">
+          <span>Last GPS update:</span>
+          <span>{formatLastUpdate(tech.last_update)}</span>
+        </div>
+      )}
+      
+      {!tech.current_job && tech.status === "clocked_in" && (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>No active job assigned</AlertDescription>
+        </Alert>
+      )}
     </Card>
   );
 
