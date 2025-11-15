@@ -126,11 +126,15 @@ const SignaturePad = ({ onSignatureSave, onCancel, label = "Customer Signature" 
 
       if (uploadError) throw uploadError;
 
-      const { data: { publicUrl } } = supabase.storage
+      // Use signed URL for private bucket (24 hour expiry)
+      const { data: signedData, error: signedError } = await supabase.storage
         .from('job-photos')
-        .getPublicUrl(fileName);
+        .createSignedUrl(fileName, 86400); // 24 hours
 
-      onSignatureSave(publicUrl);
+      if (signedError) throw signedError;
+      if (!signedData) throw new Error('Failed to generate signed URL');
+
+      onSignatureSave(signedData.signedUrl);
 
       toast({
         title: "Signature saved",

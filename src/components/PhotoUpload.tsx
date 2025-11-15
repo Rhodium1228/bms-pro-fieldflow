@@ -63,11 +63,13 @@ const PhotoUpload = ({ jobId, existingPhotos = [], onPhotosUpdate, label = "Uplo
 
         if (uploadError) throw uploadError;
 
-        const { data: { publicUrl } } = supabase.storage
+        // Use signed URL for private bucket (24 hour expiry)
+        const { data: signedData, error: signedError } = await supabase.storage
           .from('job-photos')
-          .getPublicUrl(fileName);
+          .createSignedUrl(fileName, 86400); // 24 hours
 
-        uploadedUrls.push(publicUrl);
+        if (signedError) throw signedError;
+        if (signedData) uploadedUrls.push(signedData.signedUrl);
       }
 
       const updatedPhotos = [...photos, ...uploadedUrls];
