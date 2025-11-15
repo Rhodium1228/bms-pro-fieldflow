@@ -35,6 +35,42 @@ const Home = () => {
     loadData();
   }, []);
 
+  useEffect(() => {
+    const setupRealtimeSubscription = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Subscribe to real-time updates for jobs
+      const channel = supabase
+        .channel('jobs-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'jobs',
+            filter: `assigned_to=eq.${user.id}`
+          },
+          (payload) => {
+            console.log('Job updated:', payload);
+            // Reload data when a job is updated
+            loadData();
+          }
+        )
+        .subscribe();
+
+      return channel;
+    };
+
+    let channelPromise = setupRealtimeSubscription();
+
+    return () => {
+      channelPromise.then((channel) => {
+        if (channel) supabase.removeChannel(channel);
+      });
+    };
+  }, []);
+
   const loadData = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
