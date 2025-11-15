@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+import { z } from "zod";
 
 interface JobFormProps {
   onSuccess: () => void;
@@ -20,6 +21,23 @@ interface StaffMember {
     full_name: string;
   };
 }
+
+const jobSchema = z.object({
+  customer_email: z.string().email({ message: "Invalid email format" }).max(255).or(z.literal('')),
+  customer_phone: z.string().regex(/^[0-9+\-\s()]*$/, { message: "Invalid phone format" }).max(20).optional().or(z.literal('')),
+  customer_name: z.string().trim().min(1, { message: "Customer name is required" }).max(200),
+  customer_address: z.string().trim().min(1, { message: "Address is required" }).max(500),
+  job_description: z.string().trim().min(10, { message: "Description must be at least 10 characters" }).max(2000),
+  materials_required: z.string().max(2000).optional().or(z.literal('')),
+  safety_requirements: z.string().max(2000).optional().or(z.literal('')),
+  job_type: z.string().optional(),
+  priority: z.string().optional(),
+  assigned_to: z.string().optional().or(z.literal('')),
+  scheduled_date: z.string().min(1, { message: "Date is required" }),
+  scheduled_time: z.string().min(1, { message: "Time is required" }),
+  estimated_duration: z.string().optional(),
+  work_items: z.string().optional(),
+});
 
 const JobForm = ({ onSuccess, onCancel, jobId }: JobFormProps) => {
   const { toast } = useToast();
@@ -79,7 +97,7 @@ const JobForm = ({ onSuccess, onCancel, jobId }: JobFormProps) => {
 
       setStaffMembers(staffWithProfiles);
     } catch (error) {
-      console.error("Error loading staff:", error);
+      // Error loading staff members
     }
   };
 
@@ -106,6 +124,10 @@ const JobForm = ({ onSuccess, onCancel, jobId }: JobFormProps) => {
         ? data.materials_checklist.map((item: any) => item.item).join(", ")
         : data.materials_required || "";
       
+      const workItems = Array.isArray(data.work_progress)
+        ? data.work_progress.map((item: any) => item.item).join(", ")
+        : "";
+      
       setFormData({
         customer_name: data.customer_name,
         customer_address: data.customer_address,
@@ -120,12 +142,9 @@ const JobForm = ({ onSuccess, onCancel, jobId }: JobFormProps) => {
         scheduled_time: scheduledDate.toTimeString().slice(0, 5),
         materials_required: materialsItems,
         safety_requirements: safetyItems,
-        work_items: Array.isArray(data.work_progress) 
-          ? data.work_progress.map((item: any) => item.item).join(", ")
-          : "",
+        work_items: workItems,
       });
     } catch (error) {
-      console.error("Error loading job:", error);
       toast({
         title: "Error",
         description: "Failed to load job data",
@@ -139,39 +158,51 @@ const JobForm = ({ onSuccess, onCancel, jobId }: JobFormProps) => {
     setLoading(true);
 
     try {
-      console.log("🚀 Starting job creation/update...");
-      
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       
       if (userError || !user) {
-        console.error("❌ Auth error:", userError);
         throw new Error("Not authenticated. Please log in again.");
       }
       
-      console.log("✅ User authenticated:", user.id);
+      // Validate form data with zod
+      const validationResult = jobSchema.safeParse(formData);
+      
+      if (!validationResult.success) {
+        const firstError = validationResult.error.errors[0];
+        toast({
+          title: "Validation Error",
+          description: firstError.message,
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
       
       const scheduledStart = new Date(
         `${formData.scheduled_date}T${formData.scheduled_time}`
       ).toISOString();
 
-      // Convert comma-separated text to checklist format
+      // Convert comma-separated text to checklist format with max 50 items
       const safetyChecklist = formData.safety_requirements
         .split(",")
         .map(item => item.trim())
         .filter(item => item.length > 0)
-        .map(item => ({ item, completed: false }));
+        .slice(0, 50)
+        .map(item => ({ item: item.substring(0, 200), completed: false }));
 
       const materialsChecklist = formData.materials_required
         .split(",")
         .map(item => item.trim())
         .filter(item => item.length > 0)
-        .map(item => ({ item, completed: false, quantity: 1 }));
+        .slice(0, 50)
+        .map(item => ({ item: item.substring(0, 200), completed: false, quantity: 1 }));
 
       const workProgress = formData.work_items
         .split(",")
         .map(item => item.trim())
         .filter(item => item.length > 0)
-        .map(item => ({ item, completed: false }));
+        .slice(0, 50)
+        .map(item => ({ item: item.substring(0, 200), completed: false }));
 
       const jobData = {
         customer_name: formData.customer_name,
@@ -193,16 +224,7 @@ const JobForm = ({ onSuccess, onCancel, jobId }: JobFormProps) => {
         status: "pending",
       };
 
-      console.log("📝 Job data prepared:", {
-        ...jobData,
-        checklist_counts: {
-          safety: safetyChecklist.length,
-          materials: materialsChecklist.length
-        }
-      });
-
       if (jobId) {
-        console.log("🔄 Updating existing job:", jobId);
         const { error, data } = await supabase
           .from("jobs")
           .update(jobData)
@@ -210,31 +232,26 @@ const JobForm = ({ onSuccess, onCancel, jobId }: JobFormProps) => {
           .select();
 
         if (error) {
-          console.error("❌ Update error:", error);
           throw error;
         }
         
-        console.log("✅ Job updated successfully:", data);
         toast({
           title: "Success",
           description: "Job updated successfully",
         });
       } else {
-        console.log("➕ Creating new job...");
         const { error, data } = await supabase
           .from("jobs")
           .insert([jobData])
           .select();
 
         if (error) {
-          console.error("❌ Insert error:", error);
           if (error.message.includes("row-level security")) {
             throw new Error("Permission denied. You may not have supervisor privileges.");
           }
           throw error;
         }
         
-        console.log("✅ Job created successfully:", data);
         toast({
           title: "Success",
           description: "Job created successfully",
@@ -243,8 +260,6 @@ const JobForm = ({ onSuccess, onCancel, jobId }: JobFormProps) => {
 
       onSuccess();
     } catch (error: any) {
-      console.error("💥 Job save error:", error);
-      
       let errorMessage = "Failed to save job";
       if (error.message) {
         errorMessage = error.message;
