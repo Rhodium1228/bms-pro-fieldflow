@@ -140,6 +140,8 @@ export type Database = {
           signature_url: string | null
           status: string | null
           updated_at: string | null
+          work_completion: number | null
+          work_progress: Json | null
         }
         Insert: {
           assigned_to?: string | null
@@ -168,6 +170,8 @@ export type Database = {
           signature_url?: string | null
           status?: string | null
           updated_at?: string | null
+          work_completion?: number | null
+          work_progress?: Json | null
         }
         Update: {
           assigned_to?: string | null
@@ -196,6 +200,8 @@ export type Database = {
           signature_url?: string | null
           status?: string | null
           updated_at?: string | null
+          work_completion?: number | null
+          work_progress?: Json | null
         }
         Relationships: []
       }

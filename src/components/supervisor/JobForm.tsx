@@ -39,6 +39,7 @@ const JobForm = ({ onSuccess, onCancel, jobId }: JobFormProps) => {
     scheduled_time: "",
     materials_required: "",
     safety_requirements: "",
+    work_items: "",
   });
 
   useEffect(() => {
@@ -119,6 +120,9 @@ const JobForm = ({ onSuccess, onCancel, jobId }: JobFormProps) => {
         scheduled_time: scheduledDate.toTimeString().slice(0, 5),
         materials_required: materialsItems,
         safety_requirements: safetyItems,
+        work_items: Array.isArray(data.work_progress) 
+          ? data.work_progress.map((item: any) => item.item).join(", ")
+          : "",
       });
     } catch (error) {
       console.error("Error loading job:", error);
@@ -163,6 +167,12 @@ const JobForm = ({ onSuccess, onCancel, jobId }: JobFormProps) => {
         .filter(item => item.length > 0)
         .map(item => ({ item, completed: false, quantity: 1 }));
 
+      const workProgress = formData.work_items
+        .split(",")
+        .map(item => item.trim())
+        .filter(item => item.length > 0)
+        .map(item => ({ item, completed: false }));
+
       const jobData = {
         customer_name: formData.customer_name,
         customer_address: formData.customer_address,
@@ -178,6 +188,7 @@ const JobForm = ({ onSuccess, onCancel, jobId }: JobFormProps) => {
         safety_requirements: formData.safety_requirements || null,
         safety_checklist: safetyChecklist as any,
         materials_checklist: materialsChecklist as any,
+        work_progress: workProgress as any,
         created_by: user.id,
         status: "pending",
       };
@@ -414,6 +425,20 @@ const JobForm = ({ onSuccess, onCancel, jobId }: JobFormProps) => {
           placeholder="Enter requirements separated by commas (e.g., Hard hat, Safety glasses, Harness)"
         />
         <p className="text-xs text-muted-foreground">Separate items with commas</p>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="work_items">Work Items to Complete</Label>
+        <Textarea
+          id="work_items"
+          value={formData.work_items}
+          onChange={(e) => setFormData({ ...formData, work_items: e.target.value })}
+          rows={3}
+          placeholder="Enter specific work items (e.g., Fan Installation Complete, Dishwasher Repair, HVAC Filter Replacement, Electrical Panel Inspection)"
+        />
+        <p className="text-xs text-muted-foreground">
+          Separate items with commas. Common examples: Fan Installation, Dishwasher Repair, AC Unit Service, Furnace Maintenance, Water Heater Repair, Plumbing Fix, Electrical Wiring
+        </p>
       </div>
 
       <div className="flex gap-3 pt-4">
