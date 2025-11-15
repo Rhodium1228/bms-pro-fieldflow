@@ -29,6 +29,7 @@ const Home = () => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [stats, setStats] = useState({ total: 0, completed: 0, hoursWorked: 0 });
   const [workProgress, setWorkProgress] = useState({ percentage: 0, completedItems: 0, totalItems: 0, jobsWithProgress: 0 });
+  const [progressUpdated, setProgressUpdated] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -123,11 +124,18 @@ const Home = () => {
           ? Math.round((completedWorkItems / totalWorkItems) * 100) 
           : 0;
 
-        setWorkProgress({
-          percentage: overallPercentage,
-          completedItems: completedWorkItems,
-          totalItems: totalWorkItems,
-          jobsWithProgress: jobsWithWorkProgress.length,
+        setWorkProgress((prev) => {
+          const hasChanged = prev.percentage !== overallPercentage;
+          if (hasChanged) {
+            setProgressUpdated(true);
+            setTimeout(() => setProgressUpdated(false), 1000);
+          }
+          return {
+            percentage: overallPercentage,
+            completedItems: completedWorkItems,
+            totalItems: totalWorkItems,
+            jobsWithProgress: jobsWithWorkProgress.length,
+          };
         });
       }
     }
@@ -162,14 +170,14 @@ const Home = () => {
         <ClockButton />
 
         {workProgress.jobsWithProgress > 0 && (
-          <Card className="border-primary/20">
+          <Card className={`border-primary/20 transition-all duration-300 ${progressUpdated ? 'ring-2 ring-primary/30 shadow-lg shadow-primary/20' : ''}`}>
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5 text-primary" />
+                  <TrendingUp className={`h-5 w-5 text-primary transition-transform duration-300 ${progressUpdated ? 'scale-110' : ''}`} />
                   <h3 className="font-semibold">Today's Work Progress</h3>
                 </div>
-                <div className="text-2xl font-bold text-primary">
+                <div className={`text-2xl font-bold text-primary transition-all duration-300 ${progressUpdated ? 'scale-110' : ''}`}>
                   {workProgress.percentage}%
                 </div>
               </div>
