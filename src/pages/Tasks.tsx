@@ -63,10 +63,10 @@ const Tasks = () => {
   });
 
   return (
-    <div className="min-h-screen bg-background pb-20">
-      <div className="bg-primary text-primary-foreground p-6 rounded-b-3xl shadow-lg">
-        <h1 className="text-2xl font-bold">Tasks</h1>
-        <p className="text-primary-foreground/90">Manage your job assignments</p>
+    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-accent/5 pb-20">
+      <div className="bg-gradient-to-r from-primary to-accent text-primary-foreground p-6 rounded-b-3xl shadow-2xl animate-slide-in">
+        <h1 className="text-3xl font-bold">Tasks 📋</h1>
+        <p className="text-primary-foreground/90 text-base">Stay on top of your assignments</p>
       </div>
 
       <div className="p-4">
@@ -75,27 +75,34 @@ const Tasks = () => {
           onValueChange={(value) => setFilter(value as typeof filter)}
           className="w-full"
         >
-          <TabsList className="grid w-full grid-cols-4 mb-4">
-            <TabsTrigger value="today">Today</TabsTrigger>
-            <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
-            <TabsTrigger value="completed">Done</TabsTrigger>
-            <TabsTrigger value="all">All</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-4 mb-6 h-12 glass neuro-shadow">
+            <TabsTrigger value="today" className="font-semibold">Today</TabsTrigger>
+            <TabsTrigger value="upcoming" className="font-semibold">Upcoming</TabsTrigger>
+            <TabsTrigger value="completed" className="font-semibold">Done</TabsTrigger>
+            <TabsTrigger value="all" className="font-semibold">All</TabsTrigger>
           </TabsList>
 
           <TabsContent value={filter} className="space-y-3 mt-0">
             {filteredJobs.length === 0 ? (
-              <Card>
-                <CardContent className="p-6 text-center text-muted-foreground">
-                  No jobs found for this filter
+              <Card className="glass neuro-shadow animate-bounce-in">
+                <CardContent className="p-8 text-center">
+                  <div className="text-4xl mb-3">🔍</div>
+                  <p className="text-muted-foreground font-medium">No jobs found</p>
+                  <p className="text-sm text-muted-foreground mt-2">Try a different filter</p>
                 </CardContent>
               </Card>
             ) : (
-              filteredJobs.map((job) => (
-                <JobCard
+              filteredJobs.map((job, index) => (
+                <div 
                   key={job.id}
-                  job={job}
-                  onClick={() => navigate(`/tasks/${job.id}`)}
-                />
+                  className="animate-slide-in hover:scale-102 transition-transform"
+                  style={{ animationDelay: `${index * 0.05}s` }}
+                >
+                  <JobCard
+                    job={job}
+                    onClick={() => navigate(`/tasks/${job.id}`)}
+                  />
+                </div>
               ))
             )}
           </TabsContent>

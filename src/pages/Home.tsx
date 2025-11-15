@@ -7,6 +7,9 @@ import JobCard from "@/components/JobCard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Briefcase, CheckCircle2, Clock, TrendingUp } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
+import { XPBar } from "@/components/gamification/XPBar";
+import { StreakCounter } from "@/components/gamification/StreakCounter";
+import { useGamification } from "@/hooks/useGamification";
 
 interface Job {
   id: string;
@@ -31,6 +34,7 @@ const Home = () => {
   const [workProgress, setWorkProgress] = useState({ percentage: 0, completedItems: 0, totalItems: 0, jobsWithProgress: 0 });
   const [progressUpdated, setProgressUpdated] = useState(false);
   const navigate = useNavigate();
+  const gamification = useGamification();
 
   useEffect(() => {
     loadData();
@@ -158,33 +162,49 @@ const Home = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-20">
-      <div className="bg-primary text-primary-foreground p-6 rounded-b-3xl shadow-lg">
-        <h1 className="text-2xl font-bold mb-1">Welcome back!</h1>
-        <p className="text-primary-foreground/90">
+    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-accent/5 pb-20">
+      <div className="bg-gradient-to-r from-primary to-accent text-primary-foreground p-6 rounded-b-3xl shadow-2xl animate-slide-in">
+        <h1 className="text-3xl font-bold mb-2">
+          Welcome back! 👋
+        </h1>
+        <p className="text-primary-foreground/90 text-base">
           {profile?.full_name || "Field Technician"}
         </p>
       </div>
 
-      <div className="p-4 space-y-4">
+      <div className="p-4 space-y-5">
+        {/* Gamification Section */}
+        <Card className="glass neuro-shadow animate-bounce-in">
+          <CardContent className="p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <XPBar 
+                currentXP={gamification.xp} 
+                level={gamification.level} 
+                xpToNextLevel={gamification.xpToNextLevel} 
+              />
+            </div>
+            <StreakCounter streak={gamification.streak} />
+          </CardContent>
+        </Card>
+
         <ClockButton />
 
         {workProgress.jobsWithProgress > 0 && (
-          <Card className={`border-primary/20 transition-all duration-300 ${progressUpdated ? 'ring-2 ring-primary/30 shadow-lg shadow-primary/20' : ''}`}>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-3">
+          <Card className="bg-gradient-to-r from-primary/10 to-accent/10 glass neuro-shadow animate-slide-in">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  <TrendingUp className={`h-5 w-5 text-primary transition-transform duration-300 ${progressUpdated ? 'scale-110' : ''}`} />
-                  <h3 className="font-semibold">Today's Work Progress</h3>
+                  <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                    <TrendingUp className="h-5 w-5 text-primary" />
+                  </div>
+                  <h3 className="font-semibold text-lg">Today's Progress</h3>
                 </div>
-                <div className={`text-2xl font-bold text-primary transition-all duration-300 ${progressUpdated ? 'scale-110' : ''}`}>
-                  {workProgress.percentage}%
-                </div>
+                <span className="text-3xl font-bold text-primary">{workProgress.percentage}%</span>
               </div>
-              <Progress value={workProgress.percentage} className="h-3 mb-2" />
-              <div className="flex items-center justify-between text-sm text-muted-foreground">
+              <Progress value={workProgress.percentage} className="h-4 mb-3" />
+              <div className="flex items-center justify-between text-sm text-muted-foreground font-medium">
                 <span>
-                  {workProgress.completedItems} of {workProgress.totalItems} tasks completed
+                  🎯 {workProgress.completedItems} of {workProgress.totalItems} tasks crushed!
                 </span>
                 <span>
                   {workProgress.jobsWithProgress} {workProgress.jobsWithProgress === 1 ? 'job' : 'jobs'}
@@ -195,53 +215,67 @@ const Home = () => {
         )}
 
         <div className="grid grid-cols-3 gap-3">
-          <Card>
-            <CardContent className="p-4 text-center">
-              <Briefcase className="h-6 w-6 mx-auto mb-2 text-primary" />
-              <div className="text-2xl font-bold">{stats.total}</div>
-              <div className="text-xs text-muted-foreground">Today's Jobs</div>
+          <Card className="glass neuro-shadow hover:scale-105 transition-transform animate-bounce-in" style={{ animationDelay: '0.1s' }}>
+            <CardContent className="p-5 text-center">
+              <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center mx-auto mb-3">
+                <Briefcase className="h-6 w-6 text-primary" />
+              </div>
+              <div className="text-3xl font-bold">{stats.total}</div>
+              <div className="text-xs text-muted-foreground font-medium">Today's Jobs</div>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="p-4 text-center">
-              <CheckCircle2 className="h-6 w-6 mx-auto mb-2 text-success" />
-              <div className="text-2xl font-bold">{stats.completed}</div>
-              <div className="text-xs text-muted-foreground">Completed</div>
+          <Card className="glass neuro-shadow hover:scale-105 transition-transform animate-bounce-in" style={{ animationDelay: '0.2s' }}>
+            <CardContent className="p-5 text-center">
+              <div className="w-12 h-12 rounded-full bg-success/20 flex items-center justify-center mx-auto mb-3">
+                <CheckCircle2 className="h-6 w-6 text-success" />
+              </div>
+              <div className="text-3xl font-bold">{stats.completed}</div>
+              <div className="text-xs text-muted-foreground font-medium">Completed</div>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="p-4 text-center">
-              <Clock className="h-6 w-6 mx-auto mb-2 text-warning" />
-              <div className="text-2xl font-bold">{stats.hoursWorked}</div>
-              <div className="text-xs text-muted-foreground">Hours</div>
+          <Card className="glass neuro-shadow hover:scale-105 transition-transform animate-bounce-in" style={{ animationDelay: '0.3s' }}>
+            <CardContent className="p-5 text-center">
+              <div className="w-12 h-12 rounded-full bg-warning/20 flex items-center justify-center mx-auto mb-3">
+                <Clock className="h-6 w-6 text-warning" />
+              </div>
+              <div className="text-3xl font-bold">{stats.hoursWorked}</div>
+              <div className="text-xs text-muted-foreground font-medium">Hours</div>
             </CardContent>
           </Card>
         </div>
 
         <div>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold">Today's Schedule</h2>
+          <div className="flex items-center justify-between mb-4 animate-slide-in">
+            <h2 className="text-2xl font-bold">Today's Schedule 📋</h2>
             <button
               onClick={() => navigate("/tasks")}
-              className="text-sm text-primary hover:underline"
+              className="text-sm text-primary hover:underline font-semibold hover:scale-110 transition-transform"
             >
-              View all
+              View All →
             </button>
           </div>
           <div className="space-y-3">
             {jobs.length === 0 ? (
-              <Card>
-                <CardContent className="p-6 text-center text-muted-foreground">
-                  No jobs scheduled for today
+              <Card className="glass neuro-shadow animate-bounce-in">
+                <CardContent className="p-8 text-center">
+                  <div className="text-4xl mb-3">🎉</div>
+                  <p className="text-muted-foreground font-medium">No jobs scheduled for today</p>
+                  <p className="text-sm text-muted-foreground mt-2">Enjoy your free time!</p>
                 </CardContent>
               </Card>
             ) : (
-              jobs.map((job) => (
-                <JobCard
-                  key={job.id}
-                  job={job}
+              jobs.map((job, index) => (
+                <div 
+                  key={job.id} 
+                  className="animate-slide-in cursor-pointer hover:scale-102 transition-transform" 
+                  style={{ animationDelay: `${index * 0.1}s` }}
                   onClick={() => navigate(`/tasks/${job.id}`)}
-                />
+                >
+                  <JobCard
+                    job={job}
+                    onClick={() => navigate(`/tasks/${job.id}`)}
+                  />
+                </div>
               ))
             )}
           </div>

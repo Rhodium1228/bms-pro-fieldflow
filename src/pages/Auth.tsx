@@ -223,13 +223,20 @@ const Auth = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-background">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">
-            {isLogin ? `${selectedRole?.charAt(0).toUpperCase()}${selectedRole?.slice(1)} Login` : "Create account"}
+    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-accent/5 flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Animated background circles */}
+      <div className="absolute top-20 left-10 w-72 h-72 bg-primary/10 rounded-full blur-3xl animate-float" />
+      <div className="absolute bottom-20 right-10 w-96 h-96 bg-accent/10 rounded-full blur-3xl animate-float" style={{ animationDelay: '1s' }} />
+      
+      <Card className="w-full max-w-md glass neuro-shadow animate-scale-in">
+        <CardHeader className="space-y-3">
+          <div className="w-16 h-16 bg-gradient-to-br from-primary to-accent rounded-2xl flex items-center justify-center mx-auto animate-bounce-in shadow-lg">
+            <span className="text-2xl font-bold text-primary-foreground">BMS</span>
+          </div>
+          <CardTitle className="text-3xl text-center font-bold">
+            {isLogin ? `${selectedRole?.charAt(0).toUpperCase()}${selectedRole?.slice(1)} Login` : "Join BMS Pro"}
           </CardTitle>
-          <CardDescription className="text-center">
+          <CardDescription className="text-center text-base">
             {isLogin
               ? "Enter your credentials to access your account"
               : "Enter your details to create a new account"}
@@ -239,18 +246,18 @@ const Auth = () => {
               variant="ghost"
               size="sm"
               onClick={() => setSelectedRole(null)}
-              className="text-xs"
+              className="text-xs hover:scale-105 transition-transform"
             >
               ← Change role
             </Button>
           )}
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleAuth} className="space-y-4">
+        <CardContent className="space-y-6">
+          <form onSubmit={handleAuth} className="space-y-5 animate-slide-in">
             {!isLogin && (
               <>
                 <div className="space-y-2">
-                  <Label htmlFor="fullName">Full Name</Label>
+                  <Label htmlFor="fullName" className="text-sm font-semibold">Full Name</Label>
                   <Input
                     id="fullName"
                     type="text"
@@ -259,39 +266,41 @@ const Auth = () => {
                     onChange={(e) => setFullName(e.target.value)}
                     required={!isLogin}
                     disabled={loading}
+                    className="h-12 text-base"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="role">Role</Label>
+                  <Label htmlFor="role" className="text-sm font-semibold">Role</Label>
                   <select
                     id="role"
                     value={selectedRole || "staff"}
                     onChange={(e) => setSelectedRole(e.target.value as "staff" | "supervisor" | "manager")}
-                    className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="w-full h-12 px-4 border border-input bg-background rounded-md text-base focus:outline-none focus:ring-2 focus:ring-ring"
                     required={!isLogin}
                     disabled={loading}
                   >
-                    <option value="staff">Staff</option>
-                    <option value="supervisor">Supervisor</option>
-                    <option value="manager">Manager</option>
+                    <option value="staff">👷 Staff Member</option>
+                    <option value="supervisor">👔 Supervisor</option>
+                    <option value="manager">💼 Manager</option>
                   </select>
                 </div>
               </>
             )}
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email" className="text-sm font-semibold">Email</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="your.email@example.com"
+                placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 disabled={loading}
+                className="h-12 text-base"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password" className="text-sm font-semibold">Password</Label>
               <Input
                 id="password"
                 type="password"
@@ -300,21 +309,26 @@ const Auth = () => {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 disabled={loading}
+                className="h-12 text-base"
               />
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isLogin ? "Sign in" : "Sign up"}
+            <Button 
+              type="submit" 
+              className="w-full h-12 text-base font-semibold hover:scale-105 transition-all shadow-lg hover:shadow-xl" 
+              disabled={loading}
+            >
+              {loading && <Loader2 className="mr-2 h-5 w-5 animate-spin" />}
+              {isLogin ? "Sign In" : "Create Account"}
             </Button>
           </form>
-          <div className="mt-4 text-center text-sm">
+          <div className="mt-6 text-center text-sm">
             <button
               type="button"
               onClick={() => {
                 setIsLogin(!isLogin);
                 setSelectedRole(null);
               }}
-              className="text-primary hover:underline"
+              className="text-primary hover:underline font-medium hover:scale-105 transition-transform inline-block"
               disabled={loading}
             >
               {isLogin
