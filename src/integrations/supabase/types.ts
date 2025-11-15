@@ -241,6 +241,47 @@ export type Database = {
         }
         Relationships: []
       }
+      photo_approvals: {
+        Row: {
+          comments: string | null
+          created_at: string
+          id: string
+          job_update_id: string
+          photo_url: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+        }
+        Insert: {
+          comments?: string | null
+          created_at?: string
+          id?: string
+          job_update_id: string
+          photo_url: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+        }
+        Update: {
+          comments?: string | null
+          created_at?: string
+          id?: string
+          job_update_id?: string
+          photo_url?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "photo_approvals_job_update_id_fkey"
+            columns: ["job_update_id"]
+            isOneToOne: false
+            referencedRelation: "job_updates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
