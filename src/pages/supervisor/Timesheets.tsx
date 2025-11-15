@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import SupervisorBottomNav from "@/components/supervisor/SupervisorBottomNav";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Clock, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
+import { Clock, CheckCircle2, XCircle, AlertCircle, Filter, Users, FileCheck } from "lucide-react";
 
 interface ClockEntry {
   id: string;
@@ -38,9 +40,12 @@ const Timesheets = () => {
   const [selectedStaff, setSelectedStaff] = useState<StaffTimesheets | null>(null);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [showApproveDialog, setShowApproveDialog] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<ClockEntry | null>(null);
   const [rejectNotes, setRejectNotes] = useState("");
+  const [approveNotes, setApproveNotes] = useState("");
   const [loading, setLoading] = useState(true);
+  const [filterStatus, setFilterStatus] = useState<"all" | "pending" | "approved" | "rejected">("all");
   const [dateRange, setDateRange] = useState({
     start: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
     end: new Date().toISOString().split("T")[0],
@@ -48,6 +53,28 @@ const Timesheets = () => {
 
   useEffect(() => {
     loadTimesheets();
+  }, [dateRange]);
+
+  useEffect(() => {
+    // Set up real-time subscription for clock entries
+    const channel = supabase
+      .channel('timesheet-approval-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'clock_entries'
+        },
+        () => {
+          loadTimesheets();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [dateRange]);
 
   const loadTimesheets = async () => {
@@ -118,7 +145,9 @@ const Timesheets = () => {
     }
   };
 
-  const handleApprove = async (entryId: string) => {
+  const handleApprove = async () => {
+    if (!selectedEntry) return;
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
@@ -128,8 +157,9 @@ const Timesheets = () => {
           approval_status: "approved",
           approved_by: user?.id,
           approved_at: new Date().toISOString(),
+          approval_notes: approveNotes || null,
         })
-        .eq("id", entryId);
+        .eq("id", selectedEntry.id);
 
       if (error) throw error;
 
@@ -138,6 +168,8 @@ const Timesheets = () => {
         description: "Timesheet entry approved",
       });
 
+      setShowApproveDialog(false);
+      setApproveNotes("");
       loadTimesheets();
     } catch (error) {
       console.error("Error approving entry:", error);
@@ -239,6 +271,51 @@ const Timesheets = () => {
           </div>
         </div>
 
+        {/* Summary Statistics */}
+        <div className="grid grid-cols-3 gap-3">
+          <Card>
+            <CardContent className="pt-6 text-center">
+              <div className="text-2xl font-bold text-warning">
+                {staffTimesheets.reduce((sum, s) => sum + s.pending_count, 0)}
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">Pending</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6 text-center">
+              <div className="text-2xl font-bold text-success">
+                {staffTimesheets.reduce((sum, s) => sum + s.approved_count, 0)}
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">Approved</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6 text-center">
+              <div className="text-2xl font-bold text-primary">
+                {staffTimesheets.reduce((sum, s) => sum + s.entries.length, 0)}
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">Total</div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Filter Tabs */}
+        <Tabs value={filterStatus} onValueChange={(v) => setFilterStatus(v as typeof filterStatus)}>
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="all">All</TabsTrigger>
+            <TabsTrigger value="pending">
+              Pending
+              {staffTimesheets.reduce((sum, s) => sum + s.pending_count, 0) > 0 && (
+                <Badge className="ml-1 h-5 w-5 p-0 flex items-center justify-center text-xs">
+                  {staffTimesheets.reduce((sum, s) => sum + s.pending_count, 0)}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="approved">Approved</TabsTrigger>
+            <TabsTrigger value="rejected">Rejected</TabsTrigger>
+          </TabsList>
+        </Tabs>
+
         {/* Staff List */}
         <div className="space-y-3">
           {staffTimesheets.length === 0 ? (
@@ -246,15 +323,25 @@ const Timesheets = () => {
               <p className="text-muted-foreground">No timesheets found for this period</p>
             </Card>
           ) : (
-            staffTimesheets.map((staff) => (
-              <Card
-                key={staff.user_id}
-                className="p-4 cursor-pointer hover:bg-accent/50 transition-colors"
-                onClick={() => {
-                  setSelectedStaff(staff);
-                  setShowDetailDialog(true);
-                }}
-              >
+            staffTimesheets
+              .filter((staff) => {
+                if (filterStatus === "all") return true;
+                if (filterStatus === "pending") return staff.pending_count > 0;
+                if (filterStatus === "approved") return staff.approved_count > 0;
+                if (filterStatus === "rejected") {
+                  return staff.entries.some((e) => e.approval_status === "rejected");
+                }
+                return true;
+              })
+              .map((staff) => (
+                <Card
+                  key={staff.user_id}
+                  className="p-4 cursor-pointer hover:bg-accent/50 transition-colors"
+                  onClick={() => {
+                    setSelectedStaff(staff);
+                    setShowDetailDialog(true);
+                  }}
+                >
                 <div className="flex justify-between items-start mb-2">
                   <div>
                     <h3 className="font-semibold text-foreground">{staff.full_name}</h3>
@@ -336,7 +423,8 @@ const Timesheets = () => {
                       className="flex-1"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleApprove(entry.id);
+                        setSelectedEntry(entry);
+                        setShowApproveDialog(true);
                       }}
                     >
                       <CheckCircle2 className="h-4 w-4 mr-1" />
@@ -368,11 +456,17 @@ const Timesheets = () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Reject Timesheet Entry</DialogTitle>
+            <DialogDescription>
+              Please provide a reason for rejecting this timesheet entry.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium">Reason for Rejection</label>
+              <Label htmlFor="reject-notes" className="text-sm font-medium">
+                Reason for Rejection *
+              </Label>
               <Textarea
+                id="reject-notes"
                 value={rejectNotes}
                 onChange={(e) => setRejectNotes(e.target.value)}
                 placeholder="Enter reason for rejection..."
@@ -381,11 +475,70 @@ const Timesheets = () => {
               />
             </div>
             <div className="flex gap-3">
-              <Button variant="outline" onClick={() => setShowRejectDialog(false)} className="flex-1">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setShowRejectDialog(false);
+                  setRejectNotes("");
+                }} 
+                className="flex-1"
+              >
                 Cancel
               </Button>
-              <Button variant="destructive" onClick={handleReject} className="flex-1" disabled={!rejectNotes}>
+              <Button 
+                variant="destructive" 
+                onClick={handleReject} 
+                className="flex-1" 
+                disabled={!rejectNotes.trim()}
+              >
+                <XCircle className="h-4 w-4 mr-2" />
                 Reject
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Approve Dialog */}
+      <Dialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Approve Timesheet Entry</DialogTitle>
+            <DialogDescription>
+              Optionally add notes for this approval.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="approve-notes" className="text-sm font-medium">
+                Approval Notes (Optional)
+              </Label>
+              <Textarea
+                id="approve-notes"
+                value={approveNotes}
+                onChange={(e) => setApproveNotes(e.target.value)}
+                placeholder="Add any notes about this approval..."
+                rows={3}
+                className="mt-2"
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setShowApproveDialog(false);
+                  setApproveNotes("");
+                }} 
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleApprove} 
+                className="flex-1 bg-success hover:bg-success/90"
+              >
+                <CheckCircle2 className="h-4 w-4 mr-2" />
+                Approve
               </Button>
             </div>
           </div>
