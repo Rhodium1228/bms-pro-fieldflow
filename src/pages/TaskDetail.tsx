@@ -16,6 +16,7 @@ import { useSoundEffects } from "@/hooks/useSoundEffects";
 import { useGamification } from "@/hooks/useGamification";
 import { Confetti } from "@/components/Confetti";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { TaskComments } from "@/components/TaskComments";
 
 interface ChecklistItem {
   item: string;
@@ -464,6 +465,8 @@ const TaskDetail = () => {
             </CardContent>
           </Card>
         )}
+
+        <TaskComments jobId={id!} />
 
         <div className="space-y-3">
           {job.status === "pending" && (
