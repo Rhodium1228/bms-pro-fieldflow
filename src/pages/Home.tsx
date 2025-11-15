@@ -5,7 +5,8 @@ import BottomNav from "@/components/BottomNav";
 import ClockButton from "@/components/ClockButton";
 import JobCard from "@/components/JobCard";
 import { Card, CardContent } from "@/components/ui/card";
-import { Briefcase, CheckCircle2, Clock } from "lucide-react";
+import { Briefcase, CheckCircle2, Clock, TrendingUp } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 
 interface Job {
   id: string;
@@ -15,6 +16,8 @@ interface Job {
   scheduled_start: string;
   status: string;
   priority: string;
+  work_progress?: Array<{ item: string; completed: boolean }>;
+  work_completion?: number;
 }
 
 interface Profile {
@@ -25,6 +28,7 @@ const Home = () => {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [stats, setStats] = useState({ total: 0, completed: 0, hoursWorked: 0 });
+  const [workProgress, setWorkProgress] = useState({ percentage: 0, completedItems: 0, totalItems: 0, jobsWithProgress: 0 });
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -57,9 +61,39 @@ const Home = () => {
       .limit(5);
 
     if (jobsData) {
-      setJobs(jobsData);
+      setJobs(jobsData as unknown as Job[]);
       const completed = jobsData.filter((j) => j.status === "completed").length;
       setStats((prev) => ({ ...prev, total: jobsData.length, completed }));
+
+      // Calculate overall work progress for today's jobs
+      const jobsWithWorkProgress = jobsData.filter((job) => {
+        const workProgress = job.work_progress as any;
+        return workProgress && Array.isArray(workProgress) && workProgress.length > 0;
+      });
+
+      if (jobsWithWorkProgress.length > 0) {
+        let totalWorkItems = 0;
+        let completedWorkItems = 0;
+
+        jobsWithWorkProgress.forEach((job) => {
+          const workItems = (job.work_progress as any) || [];
+          if (Array.isArray(workItems)) {
+            totalWorkItems += workItems.length;
+            completedWorkItems += workItems.filter((item: any) => item.completed).length;
+          }
+        });
+
+        const overallPercentage = totalWorkItems > 0 
+          ? Math.round((completedWorkItems / totalWorkItems) * 100) 
+          : 0;
+
+        setWorkProgress({
+          percentage: overallPercentage,
+          completedItems: completedWorkItems,
+          totalItems: totalWorkItems,
+          jobsWithProgress: jobsWithWorkProgress.length,
+        });
+      }
     }
 
     const { data: clockData } = await supabase
@@ -90,6 +124,31 @@ const Home = () => {
 
       <div className="p-4 space-y-4">
         <ClockButton />
+
+        {workProgress.jobsWithProgress > 0 && (
+          <Card className="border-primary/20">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-primary" />
+                  <h3 className="font-semibold">Today's Work Progress</h3>
+                </div>
+                <div className="text-2xl font-bold text-primary">
+                  {workProgress.percentage}%
+                </div>
+              </div>
+              <Progress value={workProgress.percentage} className="h-3 mb-2" />
+              <div className="flex items-center justify-between text-sm text-muted-foreground">
+                <span>
+                  {workProgress.completedItems} of {workProgress.totalItems} tasks completed
+                </span>
+                <span>
+                  {workProgress.jobsWithProgress} {workProgress.jobsWithProgress === 1 ? 'job' : 'jobs'}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid grid-cols-3 gap-3">
           <Card>
