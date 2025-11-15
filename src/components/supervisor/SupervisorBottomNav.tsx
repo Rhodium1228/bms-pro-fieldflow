@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { LayoutDashboard, Briefcase, Clock, MapPin, User, CalendarDays } from "lucide-react";
+import { LayoutDashboard, Briefcase, Clock, MapPin, User, CalendarDays, Image } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePendingApprovalsCount } from "@/hooks/usePendingApprovalsCount";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ const SupervisorBottomNav = () => {
     { icon: LayoutDashboard, label: "Dashboard", path: "/supervisor" },
     { icon: Briefcase, label: "Jobs", path: "/supervisor/jobs" },
     { icon: CalendarDays, label: "Schedule", path: "/supervisor/scheduler" },
+    { icon: Image, label: "Photos", path: "/supervisor/photos" },
     { icon: MapPin, label: "Team Map", path: "/supervisor/tracking" },
     { icon: Clock, label: "Timesheets", path: "/supervisor/timesheets", badge: pendingCount },
     { icon: User, label: "Profile", path: "/profile" },
