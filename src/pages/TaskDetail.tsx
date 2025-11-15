@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, MapPin, Calendar, Clock, CheckCircle2, Play } from "lucide-react";
+import { ArrowLeft, MapPin, Calendar, Clock, CheckCircle2, Play, Navigation } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import PhotoUpload from "@/components/PhotoUpload";
@@ -206,9 +206,26 @@ const TaskDetail = () => {
             <CardTitle>{job.customer_name}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="flex items-start gap-2">
-              <MapPin className="h-5 w-5 text-muted-foreground mt-0.5 shrink-0" />
-              <span className="text-sm">{job.customer_address}</span>
+            <div className="space-y-2">
+              <div className="flex items-start gap-2">
+                <MapPin className="h-5 w-5 text-muted-foreground mt-0.5 shrink-0" />
+                <span className="text-sm">{job.customer_address}</span>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                asChild
+              >
+                <a
+                  href={`https://maps.google.com/?q=${encodeURIComponent(job.customer_address)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Navigation className="mr-2 h-4 w-4" />
+                  Navigate to Location
+                </a>
+              </Button>
             </div>
             <div className="flex items-center gap-2">
               <Calendar className="h-5 w-5 text-muted-foreground shrink-0" />
