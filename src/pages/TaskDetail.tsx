@@ -301,14 +301,111 @@ const TaskDetail = () => {
     setLoading(false);
   };
 
-  const handleSignatureSave = (url: string) => {
+  const handleSignatureSave = async (url: string) => {
     setSignatureUrl(url);
     setShowSignaturePad(false);
     
-    // Automatically complete the job after signature
-    if (job) {
-      updateStatus("completed");
+    // Automatically complete the job after signature with the URL
+    if (!job) return;
+
+    setLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    const updateData: any = { 
+      status: "completed", 
+      notes,
+      completed_at: new Date().toISOString(),
+      completed_by: user?.id,
+      signature_url: url // Use the URL parameter directly
+    };
+
+    const { error } = await supabase
+      .from("jobs")
+      .update(updateData)
+      .eq("id", job.id);
+
+    if (error) {
+      playSound('error');
+      triggerHaptic('heavy');
+      toast({
+        title: "Error",
+        description: "Failed to complete job",
+        variant: "destructive",
+      });
+    } else {
+      playSound('achievement');
+      triggerHaptic('heavy');
+      setShowConfetti(true);
+      
+      const scheduledEnd = job.scheduled_end ? new Date(job.scheduled_end) : null;
+      const now = new Date();
+      const completedEarly = scheduledEnd && now < scheduledEnd;
+      
+      const xpAmount = completedEarly ? 50 : 30;
+      const result = gamification.addXP(xpAmount);
+      
+      if (result.leveledUp) {
+        playSound('levelUp');
+        pushNotifications.notifyLevelUp(result.newLevel, result.newXP);
+      }
+      
+      const taskMasterResult = gamification.addAchievement('task_master');
+      if (taskMasterResult.isNew && taskMasterResult.achievement) {
+        playSound('achievement');
+        pushNotifications.notifyAchievement(
+          taskMasterResult.achievement.name,
+          taskMasterResult.achievement.description
+        );
+      }
+      
+      const completedJobs = parseInt(localStorage.getItem('completedJobs') || '0') + 1;
+      localStorage.setItem('completedJobs', completedJobs.toString());
+      
+      if (completedJobs >= 20) {
+        const fiveStarResult = gamification.addAchievement('five_star');
+        if (fiveStarResult.isNew && fiveStarResult.achievement) {
+          playSound('achievement');
+          pushNotifications.notifyAchievement(
+            fiveStarResult.achievement.name,
+            fiveStarResult.achievement.description
+          );
+        }
+      }
+      
+      if (completedEarly) {
+        const earlyCompletions = parseInt(localStorage.getItem('earlyCompletions') || '0') + 1;
+        localStorage.setItem('earlyCompletions', earlyCompletions.toString());
+        
+        if (earlyCompletions >= 5) {
+          const speedDemonResult = gamification.addAchievement('speed_demon');
+          if (speedDemonResult.isNew && speedDemonResult.achievement) {
+            playSound('achievement');
+            pushNotifications.notifyAchievement(
+              speedDemonResult.achievement.name,
+              speedDemonResult.achievement.description
+            );
+          }
+        }
+      }
+      
+      toast({
+        title: "🎉 Job Completed!",
+        description: `Great work! ${completedEarly ? 'Completed early! ' : ''}+${xpAmount} XP${result.leveledUp ? ` - Level ${result.newLevel}!` : ''}`,
+      });
+
+      if (user) {
+        await supabase.from("job_updates").insert({
+          job_id: job.id,
+          user_id: user.id,
+          update_type: "completed",
+          notes,
+          photo_urls: photos.length > 0 ? photos : null,
+        });
+      }
+
+      loadJob();
     }
+    setLoading(false);
   };
 
   if (!job) {
